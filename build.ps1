@@ -20,6 +20,7 @@ Copy-Item "content.js" "build/chrome/"
 Copy-Item "styles.css" "build/chrome/"
 Copy-Item "LICENSE" "build/chrome/"
 Copy-Item "icons" "build/chrome/" -Recurse -Force
+Copy-Item "events" "build/chrome/" -Recurse -Force
 
 Write-Host "Construyendo version para Firefox..." -ForegroundColor Green
 
@@ -31,55 +32,33 @@ Copy-Item "content_firefox.js" "build/firefox/content.js"
 Copy-Item "styles.css" "build/firefox/"
 Copy-Item "LICENSE" "build/firefox/"
 Copy-Item "icons" "build/firefox/" -Recurse -Force
+Copy-Item "events" "build/firefox/" -Recurse -Force
 
 Write-Host "Creando archivos ZIP..." -ForegroundColor Green
 
-# Función para crear ZIP con rutas Unix compatibles
-function Create-CrossPlatformZip {
-    param(
-        [string]$SourcePath,
-        [string]$DestinationPath
-    )
-    
-    # Usar System.IO.Compression para mejor control de rutas
-    Add-Type -AssemblyName System.IO.Compression.FileSystem
-    
-    if (Test-Path $DestinationPath) { Remove-Item $DestinationPath }
-    
-    $zip = [System.IO.Compression.ZipFile]::Open($DestinationPath, [System.IO.Compression.ZipArchiveMode]::Create)
-    $sourceFullPath = (Resolve-Path $SourcePath).Path
-    
-    try {
-        Get-ChildItem -Path $SourcePath -Recurse | Where-Object { !$_.PSIsContainer } | ForEach-Object {
-            $relativePath = $_.FullName.Substring($sourceFullPath.Length + 1)
-            # Convertir separadores de Windows a Unix
-            $relativePath = $relativePath.Replace('\', '/')
-            
-            $zipEntry = $zip.CreateEntry($relativePath)
-            $zipEntryStream = $zipEntry.Open()
-            $fileStream = [System.IO.File]::OpenRead($_.FullName)
-            
-            try {
-                $fileStream.CopyTo($zipEntryStream)
-            }
-            finally {
-                $fileStream.Close()
-                $zipEntryStream.Close()
-            }
-        }
-    }
-    finally {
-        $zip.Dispose()
-    }
-}
+# Crear ZIP para Chrome usando Compress-Archive pero con estructura correcta
+$chromeZip = "build/TsukiChat_Chrome_v2.1.0.zip"
+if (Test-Path $chromeZip) { Remove-Item $chromeZip }
 
-# Crear ZIP para Chrome
-$chromeZip = "build/TsukiChat_Chrome_v2.0.0.zip"
-Create-CrossPlatformZip -SourcePath "build/chrome" -DestinationPath $chromeZip
+# Crear directorio temporal para Chrome
+$tempChrome = "build/temp_chrome"
+if (Test-Path $tempChrome) { Remove-Item $tempChrome -Recurse -Force }
+New-Item -ItemType Directory -Path $tempChrome -Force | Out-Null
+Copy-Item "build/chrome/*" $tempChrome -Recurse -Force
+Compress-Archive -Path "$tempChrome/*" -DestinationPath $chromeZip
+Remove-Item $tempChrome -Recurse -Force
 
-# Crear ZIP para Firefox  
-$firefoxZip = "build/TsukiChat_Firefox_v2.0.0.zip"
-Create-CrossPlatformZip -SourcePath "build/firefox" -DestinationPath $firefoxZip
+# Crear ZIP para Firefox usando Compress-Archive pero con estructura correcta
+$firefoxZip = "build/TsukiChat_Firefox_v2.1.0.zip"
+if (Test-Path $firefoxZip) { Remove-Item $firefoxZip }
+
+# Crear directorio temporal para Firefox
+$tempFirefox = "build/temp_firefox"
+if (Test-Path $tempFirefox) { Remove-Item $tempFirefox -Recurse -Force }
+New-Item -ItemType Directory -Path $tempFirefox -Force | Out-Null
+Copy-Item "build/firefox/*" $tempFirefox -Recurse -Force
+Compress-Archive -Path "$tempFirefox/*" -DestinationPath $firefoxZip
+Remove-Item $tempFirefox -Recurse -Force
 
 Write-Host "Build completado!" -ForegroundColor Green
 Write-Host "Chrome: $chromeZip" -ForegroundColor Yellow

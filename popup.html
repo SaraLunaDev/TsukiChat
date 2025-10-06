@@ -12,20 +12,20 @@
 			font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
 			background: #1a1a1a;
 			color: #ffffff;
-			margin: 0;
+			margin: 0
 		}
 
 		.section {
 			margin-bottom: 16px;
 			background: #2a2a2a;
 			padding: 12px;
-			border-radius: 6px;
+			border-radius: 6px
 		}
 
 		.toggle-container {
 			display: flex;
 			align-items: center;
-			justify-content: space-between;
+			justify-content: space-between
 		}
 
 		.toggle {
@@ -35,11 +35,11 @@
 			background: #666;
 			border-radius: 12px;
 			cursor: pointer;
-			transition: background 0.3s;
+			transition: background 0.3s
 		}
 
 		.toggle.active {
-			background: #FFB8C3;
+			background: #FFB8C3
 		}
 
 		.toggle::after {
@@ -51,18 +51,18 @@
 			border-radius: 50%;
 			top: 2px;
 			left: 2px;
-			transition: transform 0.3s;
+			transition: transform 0.3s
 		}
 
 		.toggle.active::after {
-			transform: translateX(20px);
+			transform: translateX(20px)
 		}
 
 		.status {
 			font-size: 11px;
 			text-align: center;
 			margin-top: 8px;
-			color: #888;
+			color: #888
 		}
 	</style>
 </head>
@@ -74,9 +74,7 @@
 			<div class="toggle" id="backgroundToggle"></div>
 		</div>
 	</div>
-
 	<div class="status" id="status">Configuración lista</div>
-
 	<script src="popup.js"></script>
 </body>
 

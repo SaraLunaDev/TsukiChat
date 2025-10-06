@@ -1,7 +1,7 @@
 {
 	"manifest_version": 2,
 	"name": "TsukiChat",
-	"version": "2.0.0",
+	"version": "2.1.0",
 	"description": "Modifica la apariencia de los VODs de YouTube para que simule ser el chat de Twitch",
 	"permissions": [
 		"storage",
@@ -61,6 +61,6 @@
 		}
 	},
 	"web_accessible_resources": [
-		"styles.css"
+		"events/*.svg"
 	]
 }
