@@ -1,0 +1,42 @@
+yt-live-chat-text-message-renderer[data-tsuki-processed="true"] #author-name {
+	background-color: transparent !important;
+	text-shadow: none !important;
+	box-shadow: none !important;
+	filter: none !important;
+	color: inherit !important;
+}
+
+yt-live-chat-text-message-renderer[data-tsuki-processed="true"] yt-live-chat-author-chip {
+	background-color: transparent !important;
+	text-shadow: none !important;
+	box-shadow: none !important;
+	filter: none !important;
+	color: inherit !important;
+	--yt-live-chat-author-chip-owner-text-color: inherit !important;
+	--yt-live-chat-primary-text-color: inherit !important;
+}
+
+yt-live-chat-text-message-renderer[data-tsuki-processed="true"] yt-live-chat-author-chip span {
+	text-shadow: none !important;
+	box-shadow: none !important;
+	filter: none !important;
+	color: inherit !important;
+	--yt-live-chat-author-chip-owner-text-color: inherit !important;
+	--yt-live-chat-primary-text-color: inherit !important;
+}
+
+yt-live-chat-text-message-renderer[data-tsuki-processed="true"] #author-photo {
+	display: none !important;
+}
+
+yt-live-chat-text-message-renderer[data-tsuki-processed="true"] #timestamp {
+	margin: var(--yt-live-chat-item-timestamp-margin, 0 4px 0 0) !important;
+}
+
+yt-live-chat-text-message-renderer[data-tsuki-processed="true"] yt-live-chat-author-chip {
+	margin-right: var(--yt-live-chat-author-chip-margin-right, 2px) !important;
+}
+
+yt-live-chat-text-message-renderer[data-tsuki-processed="true"] {
+	margin-bottom: 4px !important;
+}

@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="es">
+
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<title>TsukiChat</title>
+	<style>
+		body {
+			width: 280px;
+			padding: 16px;
+			font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+			background: #1a1a1a;
+			color: #ffffff;
+			margin: 0;
+		}
+
+		.section {
+			margin-bottom: 16px;
+			background: #2a2a2a;
+			padding: 12px;
+			border-radius: 6px;
+		}
+
+		.toggle-container {
+			display: flex;
+			align-items: center;
+			justify-content: space-between;
+		}
+
+		.toggle {
+			position: relative;
+			width: 44px;
+			height: 24px;
+			background: #666;
+			border-radius: 12px;
+			cursor: pointer;
+			transition: background 0.3s;
+		}
+
+		.toggle.active {
+			background: #FFB8C3;
+		}
+
+		.toggle::after {
+			content: '';
+			position: absolute;
+			width: 20px;
+			height: 20px;
+			background: white;
+			border-radius: 50%;
+			top: 2px;
+			left: 2px;
+			transition: transform 0.3s;
+		}
+
+		.toggle.active::after {
+			transform: translateX(20px);
+		}
+
+		.status {
+			font-size: 11px;
+			text-align: center;
+			margin-top: 8px;
+			color: #888;
+		}
+	</style>
+</head>
+
+<body>
+	<div class="section">
+		<div class="toggle-container">
+			<span>Activar fondo alterno</span>
+			<div class="toggle" id="backgroundToggle"></div>
+		</div>
+	</div>
+
+	<div class="status" id="status">Configuración lista</div>
+
+	<script src="popup.js"></script>
+</body>
+
+</html>
