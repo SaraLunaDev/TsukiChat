@@ -37,7 +37,7 @@ Copy-Item "events" "build/firefox/" -Recurse -Force
 Write-Host "Creando archivos ZIP..." -ForegroundColor Green
 
 # Crear ZIP para Chrome usando Compress-Archive pero con estructura correcta
-$chromeZip = "build/TsukiChat_Chrome_v2.1.0.zip"
+$chromeZip = "build/TsukiChat_Chrome_v2.2.5.zip"
 if (Test-Path $chromeZip) { Remove-Item $chromeZip }
 
 # Crear directorio temporal para Chrome
@@ -48,17 +48,42 @@ Copy-Item "build/chrome/*" $tempChrome -Recurse -Force
 Compress-Archive -Path "$tempChrome/*" -DestinationPath $chromeZip
 Remove-Item $tempChrome -Recurse -Force
 
-# Crear ZIP para Firefox usando Compress-Archive pero con estructura correcta
-$firefoxZip = "build/TsukiChat_Firefox_v2.1.0.zip"
+# Crear ZIP para Firefox usando método compatible
+$firefoxZip = "build/TsukiChat_Firefox_v2.2.5.zip"
 if (Test-Path $firefoxZip) { Remove-Item $firefoxZip }
 
-# Crear directorio temporal para Firefox
-$tempFirefox = "build/temp_firefox"
-if (Test-Path $tempFirefox) { Remove-Item $tempFirefox -Recurse -Force }
-New-Item -ItemType Directory -Path $tempFirefox -Force | Out-Null
-Copy-Item "build/firefox/*" $tempFirefox -Recurse -Force
-Compress-Archive -Path "$tempFirefox/*" -DestinationPath $firefoxZip
-Remove-Item $tempFirefox -Recurse -Force
+# Usar .NET para crear ZIP con rutas Unix compatibles
+Add-Type -AssemblyName System.IO.Compression.FileSystem
+
+# Crear el archivo ZIP vacío
+$zipFile = [System.IO.Compression.ZipFile]::Open($firefoxZip, [System.IO.Compression.ZipArchiveMode]::Create)
+
+# Función para agregar archivos recursivamente con rutas Unix
+function Add-ToZipRecursive {
+    param($SourcePath, $ZipArchive, $EntryPrefix = "")
+    
+    Get-ChildItem $SourcePath | ForEach-Object {
+        $relativePath = if ($EntryPrefix) { "$EntryPrefix/$($_.Name)" } else { $_.Name }
+        $relativePath = $relativePath -replace '\\', '/'  # Convertir a barras Unix
+        
+        if ($_.PSIsContainer) {
+            # Es un directorio - agregar recursivamente
+            Add-ToZipRecursive -SourcePath $_.FullName -ZipArchive $ZipArchive -EntryPrefix $relativePath
+        } else {
+            # Es un archivo - agregarlo al ZIP
+            $entry = $ZipArchive.CreateEntry($relativePath)
+            $entryStream = $entry.Open()
+            $fileStream = [System.IO.File]::OpenRead($_.FullName)
+            $fileStream.CopyTo($entryStream)
+            $fileStream.Close()
+            $entryStream.Close()
+        }
+    }
+}
+
+# Agregar todos los archivos de Firefox
+Add-ToZipRecursive -SourcePath "build/firefox" -ZipArchive $zipFile
+$zipFile.Dispose()
 
 Write-Host "Build completado!" -ForegroundColor Green
 Write-Host "Chrome: $chromeZip" -ForegroundColor Yellow

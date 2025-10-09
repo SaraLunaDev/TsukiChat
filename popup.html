@@ -64,6 +64,50 @@
 			margin-top: 8px;
 			color: #888
 		}
+
+		.slider-container {
+			display: flex;
+			align-items: center;
+			justify-content: space-between;
+			margin-top: 8px
+		}
+
+		.slider {
+			flex: 1;
+			margin: 0 8px;
+			height: 4px;
+			border-radius: 2px;
+			background: #666;
+			outline: none;
+			-webkit-appearance: none;
+			appearance: none
+		}
+
+		.slider::-webkit-slider-thumb {
+			-webkit-appearance: none;
+			appearance: none;
+			width: 16px;
+			height: 16px;
+			border-radius: 50%;
+			background: #FFB8C3;
+			cursor: pointer
+		}
+
+		.slider::-moz-range-thumb {
+			width: 16px;
+			height: 16px;
+			border-radius: 50%;
+			background: #FFB8C3;
+			cursor: pointer;
+			border: none
+		}
+
+		.font-size-label {
+			font-size: 11px;
+			color: #ccc;
+			min-width: 30px;
+			text-align: center
+		}
 	</style>
 </head>
 
@@ -72,6 +116,35 @@
 		<div class="toggle-container">
 			<span>Activar fondo alterno</span>
 			<div class="toggle" id="backgroundToggle"></div>
+		</div>
+	</div>
+	<div class="section">
+		<div class="toggle-container">
+			<span>Ajuste automático de colores</span>
+			<div class="toggle" id="colorAdjustToggle"></div>
+		</div>
+	</div>
+	<div class="section">
+		<span>Tamaño de fuente</span>
+		<div class="slider-container">
+			<span class="font-size-label">12px</span>
+			<input type="range" min="12" max="18" value="14" class="slider" id="fontSizeSlider">
+			<span class="font-size-label">18px</span>
+		</div>
+		<div style="text-align: center; margin-top: 4px;">
+			<span id="fontSizeValue" style="font-size: 11px; color: #ccc;">14px</span>
+		</div>
+	</div>
+	<div class="section">
+		<div class="toggle-container">
+			<span>Modo oscuro del chat</span>
+			<div class="toggle" id="darkModeToggle"></div>
+		</div>
+	</div>
+	<div class="section">
+		<div class="toggle-container">
+			<span>Líneas divisorias</span>
+			<div class="toggle" id="dividerToggle"></div>
 		</div>
 	</div>
 	<div class="status" id="status">Configuración lista</div>

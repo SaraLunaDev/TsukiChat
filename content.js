@@ -2,47 +2,283 @@
     'use strict';
     if (!(window.location.href.includes('live_chat') || window !== window.top || document.querySelector('yt-live-chat-app'))) return;
     let backgroundEnabled = true;
-    chrome.storage.sync.get(['backgroundEnabled'], (result) => {
+    let colorAdjustEnabled = false;
+    let fontSize = 14;
+    let darkModeEnabled = true;
+    let dividerEnabled = false;
+    
+    chrome.storage.sync.get(['backgroundEnabled', 'colorAdjustEnabled', 'fontSize', 'darkModeEnabled', 'dividerEnabled'], (result) => {
         backgroundEnabled = result.backgroundEnabled !== false;
+        colorAdjustEnabled = result.colorAdjustEnabled === true;
+        fontSize = result.fontSize || 14;
+        darkModeEnabled = result.darkModeEnabled !== false;
+        dividerEnabled = result.dividerEnabled === true;
         updateBackgroundStyles();
+        updateFontSize();
+        updateChatTheme();
     });
+    
     chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         if (message.action === 'toggleBackground') {
             backgroundEnabled = message.enabled;
+            updateBackgroundStyles();
+            sendResponse({ success: true });
+        } else if (message.action === 'toggleColorAdjust') {
+            colorAdjustEnabled = message.enabled;
+            reapplyColorAdjustment();
+            sendResponse({ success: true });
+        } else if (message.action === 'updateFontSize') {
+            fontSize = message.fontSize;
+            updateFontSize();
+            sendResponse({ success: true });
+        } else if (message.action === 'toggleDarkMode') {
+            darkModeEnabled = message.enabled;
+            updateChatTheme();
+            updateBackgroundStyles();
+            reapplyColorAdjustment();
+            sendResponse({ success: true });
+        } else if (message.action === 'toggleDivider') {
+            dividerEnabled = message.enabled;
             updateBackgroundStyles();
             sendResponse({ success: true });
         }
         return true;
     });
     
-    const updateBackgroundStyles = () => {
-        let styleElement = document.getElementById('tsuki-background-styles');
-        if (styleElement) {
-            styleElement.remove();
+    const adjustColor = (hexColor) => {
+        if (!colorAdjustEnabled) return hexColor;
+        
+        const r = parseInt(hexColor.slice(1, 3), 16);
+        const g = parseInt(hexColor.slice(3, 5), 16);
+        const b = parseInt(hexColor.slice(5, 7), 16);
+        
+        const luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
+        
+        if (darkModeEnabled) {
+            if (luminance < 0.25) {
+                const factor = 1.5;
+                const newR = Math.min(255, Math.round(r * factor));
+                const newG = Math.min(255, Math.round(g * factor));
+                const newB = Math.min(255, Math.round(b * factor));
+                
+                const toHex = (val) => val.toString(16).padStart(2, '0');
+                return `#${toHex(newR)}${toHex(newG)}${toHex(newB)}`;
+            }
+            return hexColor;
+        } else {
+            if (luminance > 0.8) {
+                const factor = 0.4 / Math.max(luminance, 0.1);
+                const newR = Math.round(r * factor);
+                const newG = Math.round(g * factor);
+                const newB = Math.round(b * factor);
+                
+                const toHex = (val) => val.toString(16).padStart(2, '0');
+                return `#${toHex(newR)}${toHex(newG)}${toHex(newB)}`;
+            } else if (luminance > 0.6) {
+                const newR = Math.round(r * 0.85);
+                const newG = Math.round(g * 0.85);
+                const newB = Math.round(b * 0.85);
+                
+                const toHex = (val) => val.toString(16).padStart(2, '0');
+                return `#${toHex(newR)}${toHex(newG)}${toHex(newB)}`;
+            }
+            return hexColor;
+        }
+    };
+    
+    const updateFontSize = () => {
+        let fontStyleElement = document.getElementById('tsuki-font-styles');
+        if (fontStyleElement) {
+            fontStyleElement.remove();
         }
         
-        if (backgroundEnabled) {
-            styleElement = document.createElement('style');
-            styleElement.id = 'tsuki-background-styles';
-            styleElement.textContent = `
-                yt-live-chat-text-message-renderer[data-tsuki-processed="true"]:not([data-tsuki-event]):nth-child(odd) {
-                    background-color: rgba(255, 255, 255, 0.05) !important;
-                }
-                yt-live-chat-text-message-renderer[data-tsuki-processed="true"]:not([data-tsuki-event]):nth-child(even) {
-                    background-color: transparent !important;
-                }
-            `;
-            document.head.appendChild(styleElement);
-        } else {
-            styleElement = document.createElement('style');
-            styleElement.id = 'tsuki-background-styles';
-            styleElement.textContent = `
-                yt-live-chat-text-message-renderer[data-tsuki-processed="true"]:not([data-tsuki-event]) {
-                    background-color: transparent !important;
-                }
-            `;
-            document.head.appendChild(styleElement);
+        fontStyleElement = document.createElement('style');
+        fontStyleElement.id = 'tsuki-font-styles';
+        fontStyleElement.textContent = `
+            yt-live-chat-text-message-renderer[data-tsuki-processed="true"] #message,
+            yt-live-chat-text-message-renderer[data-tsuki-processed="true"] #author-name,
+            yt-live-chat-text-message-renderer[data-tsuki-processed="true"] yt-live-chat-author-chip span,
+            yt-live-chat-text-message-renderer[data-tsuki-event="true"] .tsuki-event-username,
+            yt-live-chat-text-message-renderer[data-tsuki-event="true"] .tsuki-event-data,
+            yt-live-chat-text-message-renderer:not([data-tsuki-processed]) #message,
+            yt-live-chat-text-message-renderer:not([data-tsuki-processed]) #author-name,
+            yt-live-chat-text-message-renderer:not([data-tsuki-processed]) yt-live-chat-author-chip span {
+                font-size: ${fontSize}px !important;
+            }
+        `;
+        document.head.appendChild(fontStyleElement);
+    };
+    
+    const updateChatTheme = () => {
+        let themeStyleElement = document.getElementById('tsuki-theme-styles');
+        if (themeStyleElement) {
+            themeStyleElement.remove();
         }
+        
+        themeStyleElement = document.createElement('style');
+        themeStyleElement.id = 'tsuki-theme-styles';
+        
+        if (darkModeEnabled) {
+            themeStyleElement.textContent = `
+                yt-live-chat-app {
+                    background-color: #0f0f0f !important;
+                }
+                yt-live-chat-renderer {
+                    background-color: #0f0f0f !important;
+                }
+                #items {
+                    background-color: #0f0f0f !important;
+                }
+                #chat-messages {
+                    background-color: #0f0f0f !important;
+                }
+                yt-live-chat-item-list-renderer {
+                    background-color: #0f0f0f !important;
+                }
+                yt-live-chat-text-message-renderer #message {
+                    color: #ffffff !important;
+                }
+                yt-live-chat-text-message-renderer #timestamp {
+                    color: #ffffff !important;
+                }
+            `;
+        } else {
+            themeStyleElement.textContent = `
+                yt-live-chat-app {
+                    background-color: #ffffff !important;
+                }
+                yt-live-chat-renderer {
+                    background-color: #ffffff !important;
+                }
+                #items {
+                    background-color: #ffffff !important;
+                }
+                #chat-messages {
+                    background-color: #ffffff !important;
+                }
+                yt-live-chat-item-list-renderer {
+                    background-color: #ffffff !important;
+                }
+                yt-live-chat-text-message-renderer #message {
+                    color: #000000 !important;
+                }
+                yt-live-chat-text-message-renderer #timestamp {
+                    color: #000000 !important;
+                }
+            `;
+        }
+        
+        document.head.appendChild(themeStyleElement);
+    };
+    
+    const reapplyColorAdjustment = () => {
+        document.querySelectorAll('yt-live-chat-text-message-renderer[data-tsuki-processed="true"]:not([data-tsuki-event])').forEach(message => {
+            const messageElement = message.querySelector('#message');
+            if (!messageElement) return;
+            
+            const originalColor = message.dataset.originalColor;
+            if (!originalColor) return;
+            
+            const adjustedColor = adjustColor(originalColor);
+            
+            const authorNameElement = message.querySelector('#author-name');
+            if (authorNameElement) {
+                authorNameElement.style.setProperty('color', adjustedColor, 'important');
+            }
+            
+            const nameSpan = message.querySelector('yt-live-chat-author-chip span[dir="auto"]');
+            const authorChip = message.querySelector('yt-live-chat-author-chip');
+            if (nameSpan) {
+                nameSpan.style.setProperty('color', adjustedColor, 'important');
+                if (authorChip) {
+                    authorChip.style.setProperty('color', adjustedColor, 'important');
+                }
+            }
+        });
+    };
+    
+    const applyColorToMessage = (message, originalColor) => {
+        const adjustedColor = adjustColor(originalColor);
+        
+        const authorNameElement = message.querySelector('#author-name');
+        if (authorNameElement) {
+            authorNameElement.style.setProperty('color', adjustedColor, 'important');
+        }
+        
+        const nameSpan = message.querySelector('yt-live-chat-author-chip span[dir="auto"]');
+        const authorChip = message.querySelector('yt-live-chat-author-chip');
+        if (nameSpan) {
+            nameSpan.style.setProperty('color', adjustedColor, 'important');
+            if (authorChip) {
+                authorChip.style.setProperty('color', adjustedColor, 'important');
+            }
+        }
+    };
+    
+    const updateBackgroundStyles = () => {
+        let styleElement = document.getElementById('tsuki-background-styles');
+        if (styleElement) styleElement.remove();
+        
+        styleElement = document.createElement('style');
+        styleElement.id = 'tsuki-background-styles';
+        
+        let css = `yt-live-chat-text-message-renderer[data-tsuki-processed="true"]:not([data-tsuki-event]), 
+                   yt-live-chat-text-message-renderer:not([data-tsuki-processed]) {
+            margin: 0 !important;
+            padding-top: 4px !important;
+            padding-bottom: 4px !important;
+        }`;
+        
+        if (backgroundEnabled) {
+            if (darkModeEnabled) {
+                css += `yt-live-chat-text-message-renderer[data-tsuki-processed="true"]:not([data-tsuki-event]):nth-child(odd),
+                        yt-live-chat-text-message-renderer:not([data-tsuki-processed]):nth-child(odd) {
+                    background-color: #1a1a1a !important;
+                }`;
+                css += `yt-live-chat-text-message-renderer[data-tsuki-processed="true"]:not([data-tsuki-event]):nth-child(even),
+                        yt-live-chat-text-message-renderer:not([data-tsuki-processed]):nth-child(even) {
+                    background-color: #0f0f0f !important;
+                }`;
+            } else {
+                css += `yt-live-chat-text-message-renderer[data-tsuki-processed="true"]:not([data-tsuki-event]):nth-child(odd),
+                        yt-live-chat-text-message-renderer:not([data-tsuki-processed]):nth-child(odd) {
+                    background-color: #f0f0f0 !important;
+                }`;
+                css += `yt-live-chat-text-message-renderer[data-tsuki-processed="true"]:not([data-tsuki-event]):nth-child(even),
+                        yt-live-chat-text-message-renderer:not([data-tsuki-processed]):nth-child(even) {
+                    background-color: #ffffff !important;
+                }`;
+            }
+        } else {
+            if (darkModeEnabled) {
+                css += `yt-live-chat-text-message-renderer[data-tsuki-processed="true"]:not([data-tsuki-event]),
+                        yt-live-chat-text-message-renderer:not([data-tsuki-processed]) {
+                    background-color: #0f0f0f !important;
+                }`;
+            } else {
+                css += `yt-live-chat-text-message-renderer[data-tsuki-processed="true"]:not([data-tsuki-event]),
+                        yt-live-chat-text-message-renderer:not([data-tsuki-processed]) {
+                    background-color: #ffffff !important;
+                }`;
+            }
+        }
+        
+        if (dividerEnabled) {
+            if (darkModeEnabled) {
+                css += `yt-live-chat-text-message-renderer[data-tsuki-processed="true"]:not([data-tsuki-event]):not(:first-child),
+                        yt-live-chat-text-message-renderer:not([data-tsuki-processed]):not(:first-child) {
+                    box-shadow: inset 0 1px 0 0 rgba(255, 255, 255, 0.1) !important;
+                }`;
+            } else {
+                css += `yt-live-chat-text-message-renderer[data-tsuki-processed="true"]:not([data-tsuki-event]):not(:first-child),
+                        yt-live-chat-text-message-renderer:not([data-tsuki-processed]):not(:first-child) {
+                    box-shadow: inset 0 1px 0 0 rgba(0, 0, 0, 0.08) !important;
+                }`;
+            }
+        }
+        
+        styleElement.textContent = css;
+        document.head.appendChild(styleElement);
     };
     
     const processMessage = message => {
@@ -53,12 +289,10 @@
         
         const messageText = messageElement.textContent.trim();
         
-        // Verificar formato de evento: bit_[usuario][mensaje x## datos] o sub_[usuario][mensaje x## datos]
         const eventMatch = messageText.match(/^(\w+)_\[([^\]]+)\]\[(.+)\]$/);
         if (eventMatch) {
             const [, eventType, username, eventData] = eventMatch;
             
-            // Buscar multiplicador en el mensaje
             const multiplierMatch = eventData.match(/(.+?)\s(x\d+)\s(.+)/);
             let eventText, multiplier, additionalText;
             
@@ -73,20 +307,16 @@
             message.dataset.tsukiProcessed = 'true';
             message.dataset.tsukiEvent = 'true';
             
-            // Crear contenedor del evento
             const eventContainer = document.createElement('div');
             eventContainer.className = 'tsuki-event-container';
             
-            // Crear elemento del nombre de usuario
             const usernameElement = document.createElement('div');
             usernameElement.className = 'tsuki-event-username';
             usernameElement.textContent = username + ':';
             
-            // Crear elemento de datos del evento
             const dataElement = document.createElement('div');
             dataElement.className = 'tsuki-event-data';
             
-            // Separar el multiplicador del resto de los datos
             const multiplierElement = document.createElement('span');
             multiplierElement.className = 'tsuki-event-multiplier';
             multiplierElement.textContent = multiplier;
@@ -105,11 +335,9 @@
             eventContainer.appendChild(usernameElement);
             eventContainer.appendChild(dataElement);
             
-            // Reemplazar contenido del mensaje
             messageElement.innerHTML = '';
             messageElement.appendChild(eventContainer);
             
-            // Intentar cargar icono del evento
             const iconUrl = chrome.runtime.getURL(`events/${eventType}.svg`);
             const iconElement = document.createElement('div');
             iconElement.className = 'tsuki-event-icon';
@@ -117,7 +345,6 @@
             const img = document.createElement('img');
             img.src = iconUrl;
             img.onerror = function() {
-                // Si no existe el icono, mantener el timestamp original
                 iconElement.style.display = 'none';
                 const timestampElement = message.querySelector('#timestamp');
                 if (timestampElement) {
@@ -125,7 +352,6 @@
                 }
             };
             img.onload = function() {
-                // Si el icono existe, ocultar el timestamp
                 const timestampElement = message.querySelector('#timestamp');
                 if (timestampElement) {
                     timestampElement.style.display = 'none';
@@ -134,13 +360,11 @@
             
             iconElement.appendChild(img);
             
-            // Insertar el icono antes del contenedor del evento
             const contentElement = message.querySelector('#content');
             if (contentElement) {
                 contentElement.insertBefore(iconElement, messageElement);
             }
             
-            // Ocultar elementos no necesarios
             const authorNameElement = message.querySelector('#author-name');
             if (authorNameElement) authorNameElement.style.display = 'none';
             
@@ -153,31 +377,26 @@
             return;
         }
         
-        // Formato normal: #HEX[username]message
         const match = messageText.match(/^#([A-Fa-f0-9]{6})\[([^\]]+)\](.*)$/);
         
         if (!match) return;
         
         const [, colorHex, extractedUsername, cleanMessage] = match;
-        const userColor = '#' + colorHex;
+        const originalColor = '#' + colorHex;
         
         message.dataset.tsukiProcessed = 'true';
+        message.dataset.originalColor = originalColor;
+        
+        applyColorToMessage(message, originalColor);
         
         const authorNameElement = message.querySelector('#author-name');
         if (authorNameElement) {
             authorNameElement.textContent = extractedUsername + ':';
-            authorNameElement.style.setProperty('color', userColor, 'important');
         }
         
         const nameSpan = message.querySelector('yt-live-chat-author-chip span[dir="auto"]');
-        const authorChip = message.querySelector('yt-live-chat-author-chip');
         if (nameSpan) {
             nameSpan.textContent = extractedUsername + ':';
-            nameSpan.style.setProperty('color', userColor, 'important');
-            
-            if (authorChip) {
-                authorChip.style.setProperty('color', userColor, 'important');
-            }
         }
         
         messageElement.textContent = cleanMessage.trim();
