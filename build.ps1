@@ -37,7 +37,7 @@ Copy-Item "events" "build/firefox/" -Recurse -Force
 Write-Host "Creando archivos ZIP..." -ForegroundColor Green
 
 # Crear ZIP para Chrome usando Compress-Archive pero con estructura correcta
-$chromeZip = "build/TsukiChat_Chrome_v2.2.5.zip"
+$chromeZip = "build/TsukiChat_Chrome_v2.2.6.zip"
 if (Test-Path $chromeZip) { Remove-Item $chromeZip }
 
 # Crear directorio temporal para Chrome
@@ -49,7 +49,7 @@ Compress-Archive -Path "$tempChrome/*" -DestinationPath $chromeZip
 Remove-Item $tempChrome -Recurse -Force
 
 # Crear ZIP para Firefox usando método compatible
-$firefoxZip = "build/TsukiChat_Firefox_v2.2.5.zip"
+$firefoxZip = "build/TsukiChat_Firefox_v2.2.6.zip"
 if (Test-Path $firefoxZip) { Remove-Item $firefoxZip }
 
 # Usar .NET para crear ZIP con rutas Unix compatibles
