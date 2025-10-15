@@ -38,7 +38,12 @@ yt-live-chat-text-message-renderer[data-tsuki-processed="true"] yt-live-chat-aut
 }
 
 yt-live-chat-text-message-renderer[data-tsuki-processed="true"] {
-	margin-bottom: 4px !important
+	margin-bottom: 4px !important;
+	padding: 4px 12px !important;
+}
+
+yt-live-chat-text-message-renderer:not([data-tsuki-processed]) {
+	padding: 4px 12px !important;
 }
 
 yt-live-chat-text-message-renderer[data-tsuki-event="true"] {

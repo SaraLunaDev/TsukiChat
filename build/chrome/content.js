@@ -16,8 +16,11 @@
     let fontSize = 14;
     let darkModeEnabled = true;
     let dividerEnabled = false;
+    let timestampsEnabled = true;
+    let badgesEnabled = true;
+    let badgeVisibility = { 0: true, 1: true, 2: true, 3: true };
     
-    chrome.storage.sync.get(['backgroundEnabled', 'colorAdjustEnabled', 'fontSize', 'darkModeEnabled', 'dividerEnabled'], (result) => {
+    chrome.storage.sync.get(['backgroundEnabled', 'colorAdjustEnabled', 'fontSize', 'darkModeEnabled', 'dividerEnabled', 'timestampsEnabled', 'badgesEnabled', 'badgeVisibility'], (result) => {
         if (chrome.runtime.lastError) {
             console.error('Storage error:', chrome.runtime.lastError);
             return;
@@ -27,9 +30,13 @@
         fontSize = result.fontSize || 14;
         darkModeEnabled = result.darkModeEnabled !== false;
         dividerEnabled = result.dividerEnabled === true;
+        timestampsEnabled = result.timestampsEnabled !== false;
+        badgesEnabled = result.badgesEnabled !== false;
+        badgeVisibility = result.badgeVisibility || { 0: true, 1: true, 2: true, 3: true };
         updateBackgroundStyles();
         updateFontSize();
         updateChatTheme();
+        updateTimestampsVisibility();
         
         processAllMessages();
         
@@ -50,6 +57,7 @@
         } else if (message.action === 'updateFontSize') {
             fontSize = message.fontSize;
             updateFontSize();
+            updateBadgesVisibility();
             sendResponse({ success: true });
         } else if (message.action === 'toggleDarkMode') {
             darkModeEnabled = message.enabled;
@@ -61,41 +69,70 @@
             dividerEnabled = message.enabled;
             updateBackgroundStyles();
             sendResponse({ success: true });
+        } else if (message.action === 'toggleTimestamps') {
+            timestampsEnabled = message.enabled;
+            updateTimestampsVisibility();
+            sendResponse({ success: true });
+        } else if (message.action === 'toggleBadges') {
+            badgesEnabled = message.enabled;
+            updateBadgesVisibility();
+            sendResponse({ success: true });
+        } else if (message.action === 'toggleBadgeVisibility') {
+            badgeVisibility[message.badgeId] = message.enabled;
+            updateBadgesVisibility();
+            sendResponse({ success: true });
         }
         return true;
     });
     
     const adjustColor = (hexColor) => {
         if (!colorAdjustEnabled) return hexColor;
-        
+
         const r = parseInt(hexColor.slice(1, 3), 16);
         const g = parseInt(hexColor.slice(3, 5), 16);
         const b = parseInt(hexColor.slice(5, 7), 16);
-        
-        const luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
-        const toHex = (val) => val.toString(16).padStart(2, '0');
-        
-        if (darkModeEnabled) {
-            if (luminance < 0.6) {
-                const factor = 0.6 / Math.max(luminance, 0.1);
-                const newR = Math.min(255, Math.round(r * factor));
-                const newG = Math.min(255, Math.round(g * factor));
-                const newB = Math.min(255, Math.round(b * factor));
-                return `#${toHex(newR)}${toHex(newG)}${toHex(newB)}`;
-            }
-        } else {
-            if (luminance > 0.6) {
-                const factor = 0.4 / Math.max(luminance, 0.1);
-                const newR = Math.round(r * factor);
-                const newG = Math.round(g * factor);
-                const newB = Math.round(b * factor);
-                return `#${toHex(newR)}${toHex(newG)}${toHex(newB)}`;
-            }
+        const toHex = (v) => v.toString(16).padStart(2, '0');
+
+        const luminance = (r, g, b) => {
+            const s = [r, g, b].map(v => {
+                v /= 255;
+                return v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4);
+            });
+            return 0.2126 * s[0] + 0.7152 * s[1] + 0.0722 * s[2];
+        };
+
+        const bgLum = darkModeEnabled ? 0.1 : 0.9;
+        const lum = luminance(r, g, b);
+        const contrast = (Math.max(lum, bgLum) + 0.05) / (Math.min(lum, bgLum) + 0.05);
+
+        // ✅ Si ya tiene suficiente contraste, no cambiar nada
+        if (contrast >= 4.5) return hexColor;
+
+        // 🔧 Si el color es muy oscuro en modo oscuro → aclarar
+        if (darkModeEnabled && lum < 0.2) {
+            const factor = 1.6;
+            const gray = (r + g + b) / 3;
+            const desat = 0.25;
+            const newR = Math.min(255, Math.round((r * (1 - desat) + gray * desat) * factor));
+            const newG = Math.min(255, Math.round((g * (1 - desat) + gray * desat) * factor));
+            const newB = Math.min(255, Math.round((b * (1 - desat) + gray * desat) * factor));
+            return `#${toHex(newR)}${toHex(newG)}${toHex(newB)}`;
         }
-        
+
+        // 🔧 Si el color es muy claro en modo claro → oscurecer
+        if (!darkModeEnabled && lum > 0.7) {
+            const factor = 0.7;
+            const gray = (r + g + b) / 3;
+            const desat = 0.2;
+            const newR = Math.round((r * (1 - desat) + gray * desat) * factor);
+            const newG = Math.round((g * (1 - desat) + gray * desat) * factor);
+            const newB = Math.round((b * (1 - desat) + gray * desat) * factor);
+            return `#${toHex(newR)}${toHex(newG)}${toHex(newB)}`;
+        }
+
         return hexColor;
     };
-    
+
     const updateFontSize = () => {
         let fontStyleElement = document.getElementById('tsuki-font-styles');
         if (fontStyleElement) {
@@ -299,6 +336,133 @@
         document.head.appendChild(styleElement);
     };
     
+    const updateBadgesVisibility = () => {
+        document.querySelectorAll('yt-live-chat-text-message-renderer[data-tsuki-processed="true"]:not([data-tsuki-event])').forEach(message => {
+            const messageElement = message.querySelector('#message');
+            if (!messageElement) return;
+            
+            const originalColor = message.dataset.originalColor;
+            if (!originalColor) return;
+            
+            // Get the original emblem data
+            const originalText = messageElement.dataset.originalText;
+            if (!originalText) return;
+            
+            const match = originalText.match(/^([0-3]*)?#([A-Fa-f0-9]{6})\[([^\]]+)\](.*)$/);
+            if (!match) return;
+            
+            const [, emblems, colorHex, extractedUsername, cleanMessage] = match;
+            const emblemNumbers = emblems ? emblems.split('').map(num => parseInt(num)) : [];
+            
+            // Update author name element
+            const authorNameElement = message.querySelector('#author-name');
+            if (authorNameElement) {
+                updateAuthorElementBadges(authorNameElement, emblemNumbers, extractedUsername);
+            }
+            
+            // Update name span element
+            const nameSpan = message.querySelector('yt-live-chat-author-chip span[dir="auto"]');
+            if (nameSpan) {
+                updateNameSpanElementBadges(nameSpan, emblemNumbers, extractedUsername);
+            }
+        });
+    };
+    
+    const updateAuthorElementBadges = (authorNameElement, emblemNumbers, extractedUsername) => {
+        if (emblemNumbers.length > 0 && badgesEnabled) {
+            const badgeSize = fontSize;
+            authorNameElement.style.fontSize = fontSize + 'px';
+            
+            const badgesContainer = document.createElement('span');
+            badgesContainer.style.cssText = `display: inline-flex; align-items: center; gap: 2px; margin-right: 4px;`;
+            
+            emblemNumbers.forEach(num => {
+                if (num >= 0 && num <= 3 && badgeVisibility[num]) {
+                    const badgeImg = document.createElement('img');
+                    try {
+                        badgeImg.src = chrome.runtime.getURL(`badges/${num}.svg`);
+                    } catch (error) {
+                        if (error.message.includes('Extension context invalidated')) {
+                            return;
+                        }
+                        console.error('Error loading badge:', error);
+                    }
+                    badgeImg.style.cssText = `width: ${badgeSize}px; height: ${badgeSize}px; vertical-align: middle; transform: translateY(2px);`;
+                    badgeImg.onerror = function() {
+                        this.style.display = 'none';
+                    };
+                    badgesContainer.appendChild(badgeImg);
+                }
+            });
+            
+            const nameSpan = document.createElement('span');
+            nameSpan.textContent = extractedUsername + ':';
+            nameSpan.style.cssText = `font-size: ${fontSize}px !important;`;
+            
+            authorNameElement.innerHTML = '';
+            if (badgesContainer.children.length > 0) {
+                authorNameElement.appendChild(badgesContainer);
+            }
+            authorNameElement.appendChild(nameSpan);
+        } else {
+            authorNameElement.textContent = extractedUsername + ':';
+            authorNameElement.style.cssText = `font-size: ${fontSize}px !important;`;
+        }
+    };
+    
+    const updateNameSpanElementBadges = (nameSpan, emblemNumbers, extractedUsername) => {
+        if (emblemNumbers.length > 0 && badgesEnabled) {
+            const badgeSize = fontSize;
+            nameSpan.style.fontSize = fontSize + 'px';
+            
+            const badgesContainer = document.createElement('span');
+            badgesContainer.style.cssText = `display: inline-flex; align-items: center; gap: 2px; margin-right: 4px;`;
+            
+            emblemNumbers.forEach(num => {
+                if (num >= 0 && num <= 3 && badgeVisibility[num]) {
+                    const badgeImg = document.createElement('img');
+                    try {
+                        badgeImg.src = chrome.runtime.getURL(`badges/${num}.svg`);
+                    } catch (error) {
+                        if (error.message.includes('Extension context invalidated')) {
+                            return;
+                        }
+                        console.error('Error loading badge:', error);
+                    }
+                    badgeImg.style.cssText = `width: ${badgeSize}px; height: ${badgeSize}px; vertical-align: middle; transform: translateY(2px);`;
+                    badgeImg.onerror = function() {
+                        this.style.display = 'none';
+                    };
+                    badgesContainer.appendChild(badgeImg);
+                }
+            });
+            
+            const textSpan = document.createElement('span');
+            textSpan.textContent = extractedUsername + ':';
+            textSpan.style.cssText = `font-size: ${fontSize}px !important;`;
+            
+            nameSpan.innerHTML = '';
+            if (badgesContainer.children.length > 0) {
+                nameSpan.appendChild(badgesContainer);
+            }
+            nameSpan.appendChild(textSpan);
+        } else {
+            nameSpan.textContent = extractedUsername + ':';
+            nameSpan.style.cssText = `font-size: ${fontSize}px !important;`;
+        }
+    };
+    
+    const updateTimestampsVisibility = () => {
+        const timestampElements = document.querySelectorAll('yt-live-chat-text-message-renderer #timestamp');
+        timestampElements.forEach(timestamp => {
+            if (timestampsEnabled) {
+                timestamp.style.display = '';
+            } else {
+                timestamp.style.display = 'none';
+            }
+        });
+    };
+    
     const processMessage = message => {
         if (message.dataset.tsukiProcessed) return;
         
@@ -412,6 +576,7 @@
         
         message.dataset.tsukiProcessed = 'true';
         message.dataset.originalColor = originalColor;
+        messageElement.dataset.originalText = messageText;
         
         applyColorToMessage(message, originalColor);
         
@@ -419,24 +584,40 @@
         if (authorNameElement) {
             let authorText = extractedUsername + ':';
             
-            if (emblemNumbers.length > 0) {
-                const emojiMap = { 0: '🎥', 1: '💎', 2: '⚔️', 3: '⭐' };
-                const emojis = emblemNumbers.map(num => emojiMap[num] || '').join('');
-                authorText = emojis + ' ' + extractedUsername + ':';
-                
-                const emojiSize = Math.max(fontSize - 1, 10);
+            if (emblemNumbers.length > 0 && badgesEnabled) {
+                const badgeSize = fontSize;
                 authorNameElement.style.fontSize = fontSize + 'px';
                 
-                const emojiSpan = document.createElement('span');
-                emojiSpan.textContent = emojis + ' ';
-                emojiSpan.style.cssText = `font-size: ${emojiSize}px !important;`;
+                const badgesContainer = document.createElement('span');
+                badgesContainer.style.cssText = `display: inline-flex; align-items: center; gap: 2px; margin-right: 4px;`;
+                
+                emblemNumbers.forEach(num => {
+                    if (num >= 0 && num <= 3 && badgeVisibility[num]) {
+                        const badgeImg = document.createElement('img');
+                        try {
+                            badgeImg.src = chrome.runtime.getURL(`badges/${num}.svg`);
+                        } catch (error) {
+                            if (error.message.includes('Extension context invalidated')) {
+                                return;
+                            }
+                            console.error('Error loading badge:', error);
+                        }
+                        badgeImg.style.cssText = `width: ${badgeSize}px; height: ${badgeSize}px; vertical-align: middle; transform: translateY(2px);`;
+                        badgeImg.onerror = function() {
+                            this.style.display = 'none';
+                        };
+                        badgesContainer.appendChild(badgeImg);
+                    }
+                });
                 
                 const nameSpan = document.createElement('span');
                 nameSpan.textContent = extractedUsername + ':';
                 nameSpan.style.cssText = `font-size: ${fontSize}px !important;`;
                 
                 authorNameElement.innerHTML = '';
-                authorNameElement.appendChild(emojiSpan);
+                if (badgesContainer.children.length > 0) {
+                    authorNameElement.appendChild(badgesContainer);
+                }
                 authorNameElement.appendChild(nameSpan);
             } else {
                 authorNameElement.textContent = authorText;
@@ -448,24 +629,40 @@
         if (nameSpan) {
             let nameText = extractedUsername + ':';
             
-            if (emblemNumbers.length > 0) {
-                const emojiMap = { 0: '🎥', 1: '💎', 2: '⚔️', 3: '⭐' };
-                const emojis = emblemNumbers.map(num => emojiMap[num] || '').join('');
-                nameText = emojis + ' ' + extractedUsername + ':';
-                
-                const emojiSize = Math.max(fontSize - 1, 10);
+            if (emblemNumbers.length > 0 && badgesEnabled) {
+                const badgeSize = fontSize;
                 nameSpan.style.fontSize = fontSize + 'px';
                 
-                const emojiSpan = document.createElement('span');
-                emojiSpan.textContent = emojis + ' ';
-                emojiSpan.style.cssText = `font-size: ${emojiSize}px !important;`;
+                const badgesContainer = document.createElement('span');
+                badgesContainer.style.cssText = `display: inline-flex; align-items: center; gap: 2px; margin-right: 4px;`;
+                
+                emblemNumbers.forEach(num => {
+                    if (num >= 0 && num <= 3 && badgeVisibility[num]) {
+                        const badgeImg = document.createElement('img');
+                        try {
+                            badgeImg.src = chrome.runtime.getURL(`badges/${num}.svg`);
+                        } catch (error) {
+                            if (error.message.includes('Extension context invalidated')) {
+                                return;
+                            }
+                            console.error('Error loading badge:', error);
+                        }
+                        badgeImg.style.cssText = `width: ${badgeSize}px; height: ${badgeSize}px; vertical-align: middle; transform: translateY(2px);`;
+                        badgeImg.onerror = function() {
+                            this.style.display = 'none';
+                        };
+                        badgesContainer.appendChild(badgeImg);
+                    }
+                });
                 
                 const textSpan = document.createElement('span');
                 textSpan.textContent = extractedUsername + ':';
                 textSpan.style.cssText = `font-size: ${fontSize}px !important;`;
                 
                 nameSpan.innerHTML = '';
-                nameSpan.appendChild(emojiSpan);
+                if (badgesContainer.children.length > 0) {
+                    nameSpan.appendChild(badgesContainer);
+                }
                 nameSpan.appendChild(textSpan);
             } else {
                 nameSpan.textContent = nameText;
@@ -487,11 +684,15 @@
     
     setTimeout(() => {
         processAllMessages();
+        updateTimestampsVisibility();
         if (colorAdjustEnabled) {
             reapplyColorAdjustment();
         }
     }, 500);
-    setTimeout(processAllMessages, 2000);
+    setTimeout(() => {
+        processAllMessages();
+        updateTimestampsVisibility();
+    }, 2000);
     
     const observer = new MutationObserver(mutations => {
         for (const mutation of mutations) {
@@ -500,8 +701,20 @@
                     if (node.nodeType === 1) {
                         if (node.tagName === 'YT-LIVE-CHAT-TEXT-MESSAGE-RENDERER') {
                             processMessage(node);
+                            // Apply timestamp visibility to the new message
+                            const timestamp = node.querySelector('#timestamp');
+                            if (timestamp) {
+                                timestamp.style.display = timestampsEnabled ? '' : 'none';
+                            }
                         } else if (node.querySelector) {
-                            node.querySelectorAll('yt-live-chat-text-message-renderer:not([data-tsuki-processed])').forEach(processMessage);
+                            node.querySelectorAll('yt-live-chat-text-message-renderer:not([data-tsuki-processed])').forEach(msg => {
+                                processMessage(msg);
+                                // Apply timestamp visibility to each new message
+                                const timestamp = msg.querySelector('#timestamp');
+                                if (timestamp) {
+                                    timestamp.style.display = timestampsEnabled ? '' : 'none';
+                                }
+                            });
                         }
                     }
                 }

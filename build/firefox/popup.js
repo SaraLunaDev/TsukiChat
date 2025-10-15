@@ -6,6 +6,13 @@ document.addEventListener('DOMContentLoaded', function() {
     const fontSizeValue = document.getElementById('fontSizeValue');
     const darkModeToggle = document.getElementById('darkModeToggle');
     const dividerToggle = document.getElementById('dividerToggle');
+    const timestampsToggle = document.getElementById('timestampsToggle');
+    const badgesToggle = document.getElementById('badgesToggle');
+    const badgeOptions = document.getElementById('badgeOptions');
+    const badge0Toggle = document.getElementById('badge0Toggle');
+    const badge1Toggle = document.getElementById('badge1Toggle');
+    const badge2Toggle = document.getElementById('badge2Toggle');
+    const badge3Toggle = document.getElementById('badge3Toggle');
     const status = document.getElementById('status');
     
     function getStorageData(keys) {
@@ -48,11 +55,17 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
     
-    getStorageData(['backgroundEnabled', 'colorAdjustEnabled', 'fontSize', 'darkModeEnabled', 'dividerEnabled']).then((result) => {
+    getStorageData(['backgroundEnabled', 'colorAdjustEnabled', 'fontSize', 'darkModeEnabled', 'dividerEnabled', 'timestampsEnabled', 'badgesEnabled', 'badgeVisibility']).then((result) => {
         backgroundToggle.classList.remove('active');
         colorAdjustToggle.classList.remove('active');
         darkModeToggle.classList.remove('active');
         dividerToggle.classList.remove('active');
+        timestampsToggle.classList.remove('active');
+        badgesToggle.classList.remove('active');
+        badge0Toggle.classList.remove('active');
+        badge1Toggle.classList.remove('active');
+        badge2Toggle.classList.remove('active');
+        badge3Toggle.classList.remove('active');
         
         if (result.backgroundEnabled !== false) {
             backgroundToggle.classList.add('active');
@@ -66,6 +79,20 @@ document.addEventListener('DOMContentLoaded', function() {
         if (result.dividerEnabled === true) {
             dividerToggle.classList.add('active');
         }
+        if (result.timestampsEnabled !== false) {
+            timestampsToggle.classList.add('active');
+        }
+        if (result.badgesEnabled !== false) {
+            badgesToggle.classList.add('active');
+            badgeOptions.style.display = 'block';
+        }
+        
+        const badgeVisibility = result.badgeVisibility || { 0: true, 1: true, 2: true, 3: true };
+        if (badgeVisibility[0]) badge0Toggle.classList.add('active');
+        if (badgeVisibility[1]) badge1Toggle.classList.add('active');
+        if (badgeVisibility[2]) badge2Toggle.classList.add('active');
+        if (badgeVisibility[3]) badge3Toggle.classList.add('active');
+        
         const fontSize = result.fontSize || 14;
         fontSizeSlider.value = fontSize;
         fontSizeValue.textContent = fontSize + 'px';
@@ -133,6 +160,57 @@ document.addEventListener('DOMContentLoaded', function() {
         });
         showStatus(isActive ? 'Líneas divisorias activadas' : 'Líneas divisorias desactivadas');
     });
+    
+    timestampsToggle.addEventListener('click', () => {
+        const isActive = timestampsToggle.classList.toggle('active');
+        setStorageData({ timestampsEnabled: isActive });
+        sendMessageToAllTabs({
+            action: 'toggleTimestamps',
+            enabled: isActive
+        });
+        showStatus(isActive ? 'Tiempo activado' : 'Tiempo desactivado');
+    });
+    
+    badgesToggle.addEventListener('click', () => {
+        const isActive = badgesToggle.classList.toggle('active');
+        setStorageData({ badgesEnabled: isActive });
+        
+        if (isActive) {
+            badgeOptions.style.display = 'block';
+        } else {
+            badgeOptions.style.display = 'none';
+        }
+        
+        sendMessageToAllTabs({
+            action: 'toggleBadges',
+            enabled: isActive
+        });
+        showStatus(isActive ? 'Badges activados' : 'Badges desactivados');
+    });
+    
+    function createBadgeToggleListener(badgeId, badgeToggle) {
+        return () => {
+            const isActive = badgeToggle.classList.toggle('active');
+            
+            getStorageData(['badgeVisibility']).then((result) => {
+                const badgeVisibility = result.badgeVisibility || { 0: true, 1: true, 2: true, 3: true };
+                badgeVisibility[badgeId] = isActive;
+                setStorageData({ badgeVisibility: badgeVisibility });
+                
+                sendMessageToAllTabs({
+                    action: 'toggleBadgeVisibility',
+                    badgeId: badgeId,
+                    enabled: isActive
+                });
+                showStatus(`Badge ${badgeId} ${isActive ? 'activado' : 'desactivado'}`);
+            });
+        };
+    }
+    
+    badge0Toggle.addEventListener('click', createBadgeToggleListener(0, badge0Toggle));
+    badge1Toggle.addEventListener('click', createBadgeToggleListener(1, badge1Toggle));
+    badge2Toggle.addEventListener('click', createBadgeToggleListener(2, badge2Toggle));
+    badge3Toggle.addEventListener('click', createBadgeToggleListener(3, badge3Toggle));
     
     function showStatus(message, isError = false) {
         status.textContent = message;

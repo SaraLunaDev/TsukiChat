@@ -58,6 +58,23 @@
 			transform: translateX(20px)
 		}
 
+		.toggle.small {
+			width: 32px;
+			height: 18px;
+			border-radius: 9px
+		}
+
+		.toggle.small::after {
+			width: 14px;
+			height: 14px;
+			top: 2px;
+			left: 2px
+		}
+
+		.toggle.small.active::after {
+			transform: translateX(14px)
+		}
+
 		.status {
 			font-size: 11px;
 			text-align: center;
@@ -114,13 +131,25 @@
 <body>
 	<div class="section">
 		<div class="toggle-container">
+			<span>Modo oscuro</span>
+			<div class="toggle" id="darkModeToggle"></div>
+		</div>
+	</div>
+	<div class="section">
+		<div class="toggle-container">
 			<span>Activar fondo alterno</span>
 			<div class="toggle" id="backgroundToggle"></div>
 		</div>
 	</div>
 	<div class="section">
 		<div class="toggle-container">
-			<span>Ajuste automático de colores</span>
+			<span>Lineas divisorias</span>
+			<div class="toggle" id="dividerToggle"></div>
+		</div>
+	</div>
+	<div class="section">
+		<div class="toggle-container">
+			<span>Colores legibles</span>
 			<div class="toggle" id="colorAdjustToggle"></div>
 		</div>
 	</div>
@@ -137,14 +166,42 @@
 	</div>
 	<div class="section">
 		<div class="toggle-container">
-			<span>Modo oscuro del chat</span>
-			<div class="toggle" id="darkModeToggle"></div>
+			<span>Mostrar tiempo</span>
+			<div class="toggle" id="timestampsToggle"></div>
 		</div>
 	</div>
 	<div class="section">
 		<div class="toggle-container">
-			<span>Líneas divisorias</span>
-			<div class="toggle" id="dividerToggle"></div>
+			<span>Mostrar emblemas</span>
+			<div class="toggle" id="badgesToggle"></div>
+		</div>
+		<div id="badgeOptions" style="display: none; margin-top: 12px; padding-top: 12px; border-top: 1px solid #444;">
+			<div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
+				<div class="badge-option">
+					<div class="toggle-container" style="justify-content: flex-start; gap: 8px;">
+						<div class="toggle small" id="badge0Toggle"></div>
+						<span style="font-size: 11px;">Streamer</span>
+					</div>
+				</div>
+				<div class="badge-option">
+					<div class="toggle-container" style="justify-content: flex-start; gap: 8px;">
+						<div class="toggle small" id="badge1Toggle"></div>
+						<span style="font-size: 11px;">Vips</span>
+					</div>
+				</div>
+				<div class="badge-option">
+					<div class="toggle-container" style="justify-content: flex-start; gap: 8px;">
+						<div class="toggle small" id="badge2Toggle"></div>
+						<span style="font-size: 11px;">Mods</span>
+					</div>
+				</div>
+				<div class="badge-option">
+					<div class="toggle-container" style="justify-content: flex-start; gap: 8px;">
+						<div class="toggle small" id="badge3Toggle"></div>
+						<span style="font-size: 11px;">Subs</span>
+					</div>
+				</div>
+			</div>
 		</div>
 	</div>
 	<div class="status" id="status">Configuración lista</div>
