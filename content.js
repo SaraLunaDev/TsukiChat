@@ -1,6 +1,16 @@
 (function() {
     'use strict';
     if (!(window.location.href.includes('live_chat') || window !== window.top || document.querySelector('yt-live-chat-app'))) return;
+    
+    try {
+        chrome.runtime.getURL('');
+    } catch (error) {
+        if (error.message.includes('Extension context invalidated')) {
+            console.log('Extension context invalidated, stopping execution');
+            return;
+        }
+    }
+    
     let backgroundEnabled = true;
     let colorAdjustEnabled = false;
     let fontSize = 14;
@@ -8,6 +18,10 @@
     let dividerEnabled = false;
     
     chrome.storage.sync.get(['backgroundEnabled', 'colorAdjustEnabled', 'fontSize', 'darkModeEnabled', 'dividerEnabled'], (result) => {
+        if (chrome.runtime.lastError) {
+            console.error('Storage error:', chrome.runtime.lastError);
+            return;
+        }
         backgroundEnabled = result.backgroundEnabled !== false;
         colorAdjustEnabled = result.colorAdjustEnabled === true;
         fontSize = result.fontSize || 14;
@@ -16,6 +30,12 @@
         updateBackgroundStyles();
         updateFontSize();
         updateChatTheme();
+        
+        processAllMessages();
+        
+        if (colorAdjustEnabled) {
+            reapplyColorAdjustment();
+        }
     });
     
     chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
@@ -53,37 +73,27 @@
         const b = parseInt(hexColor.slice(5, 7), 16);
         
         const luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
+        const toHex = (val) => val.toString(16).padStart(2, '0');
         
         if (darkModeEnabled) {
-            if (luminance < 0.25) {
-                const factor = 1.5;
+            if (luminance < 0.6) {
+                const factor = 0.6 / Math.max(luminance, 0.1);
                 const newR = Math.min(255, Math.round(r * factor));
                 const newG = Math.min(255, Math.round(g * factor));
                 const newB = Math.min(255, Math.round(b * factor));
-                
-                const toHex = (val) => val.toString(16).padStart(2, '0');
                 return `#${toHex(newR)}${toHex(newG)}${toHex(newB)}`;
             }
-            return hexColor;
         } else {
-            if (luminance > 0.8) {
+            if (luminance > 0.6) {
                 const factor = 0.4 / Math.max(luminance, 0.1);
                 const newR = Math.round(r * factor);
                 const newG = Math.round(g * factor);
                 const newB = Math.round(b * factor);
-                
-                const toHex = (val) => val.toString(16).padStart(2, '0');
-                return `#${toHex(newR)}${toHex(newG)}${toHex(newB)}`;
-            } else if (luminance > 0.6) {
-                const newR = Math.round(r * 0.85);
-                const newG = Math.round(g * 0.85);
-                const newB = Math.round(b * 0.85);
-                
-                const toHex = (val) => val.toString(16).padStart(2, '0');
                 return `#${toHex(newR)}${toHex(newG)}${toHex(newB)}`;
             }
-            return hexColor;
         }
+        
+        return hexColor;
     };
     
     const updateFontSize = () => {
@@ -135,6 +145,10 @@
                 yt-live-chat-item-list-renderer {
                     background-color: #0f0f0f !important;
                 }
+                yt-live-chat-banner-renderer {
+                    background-color: #0f0f0f !important;
+                    --yt-spec-inverted-background: #0f0f0f !important;
+                }
                 yt-live-chat-text-message-renderer #message {
                     color: #ffffff !important;
                 }
@@ -158,6 +172,10 @@
                 }
                 yt-live-chat-item-list-renderer {
                     background-color: #ffffff !important;
+                }
+                yt-live-chat-banner-renderer {
+                    background-color: #ffffff !important;
+                    --yt-spec-inverted-background: #ffffff !important;
                 }
                 yt-live-chat-text-message-renderer #message {
                     color: #000000 !important;
@@ -343,7 +361,14 @@
             iconElement.className = 'tsuki-event-icon';
             
             const img = document.createElement('img');
-            img.src = iconUrl;
+            try {
+                img.src = iconUrl;
+            } catch (error) {
+                if (error.message.includes('Extension context invalidated')) {
+                    return;
+                }
+                console.error('Error loading icon:', error);
+            }
             img.onerror = function() {
                 iconElement.style.display = 'none';
                 const timestampElement = message.querySelector('#timestamp');
@@ -359,7 +384,7 @@
             };
             
             iconElement.appendChild(img);
-            
+
             const contentElement = message.querySelector('#content');
             if (contentElement) {
                 contentElement.insertBefore(iconElement, messageElement);
@@ -377,12 +402,13 @@
             return;
         }
         
-        const match = messageText.match(/^#([A-Fa-f0-9]{6})\[([^\]]+)\](.*)$/);
+        const match = messageText.match(/^([0-3]*)?#([A-Fa-f0-9]{6})\[([^\]]+)\](.*)$/);
         
         if (!match) return;
         
-        const [, colorHex, extractedUsername, cleanMessage] = match;
+        const [, emblems, colorHex, extractedUsername, cleanMessage] = match;
         const originalColor = '#' + colorHex;
+        const emblemNumbers = emblems ? emblems.split('').map(num => parseInt(num)) : [];
         
         message.dataset.tsukiProcessed = 'true';
         message.dataset.originalColor = originalColor;
@@ -391,12 +417,60 @@
         
         const authorNameElement = message.querySelector('#author-name');
         if (authorNameElement) {
-            authorNameElement.textContent = extractedUsername + ':';
+            let authorText = extractedUsername + ':';
+            
+            if (emblemNumbers.length > 0) {
+                const emojiMap = { 0: '🎥', 1: '💎', 2: '⚔️', 3: '⭐' };
+                const emojis = emblemNumbers.map(num => emojiMap[num] || '').join('');
+                authorText = emojis + ' ' + extractedUsername + ':';
+                
+                const emojiSize = Math.max(fontSize - 1, 10);
+                authorNameElement.style.fontSize = fontSize + 'px';
+                
+                const emojiSpan = document.createElement('span');
+                emojiSpan.textContent = emojis + ' ';
+                emojiSpan.style.cssText = `font-size: ${emojiSize}px !important;`;
+                
+                const nameSpan = document.createElement('span');
+                nameSpan.textContent = extractedUsername + ':';
+                nameSpan.style.cssText = `font-size: ${fontSize}px !important;`;
+                
+                authorNameElement.innerHTML = '';
+                authorNameElement.appendChild(emojiSpan);
+                authorNameElement.appendChild(nameSpan);
+            } else {
+                authorNameElement.textContent = authorText;
+                authorNameElement.style.cssText = `font-size: ${fontSize}px !important;`;
+            }
         }
         
         const nameSpan = message.querySelector('yt-live-chat-author-chip span[dir="auto"]');
         if (nameSpan) {
-            nameSpan.textContent = extractedUsername + ':';
+            let nameText = extractedUsername + ':';
+            
+            if (emblemNumbers.length > 0) {
+                const emojiMap = { 0: '🎥', 1: '💎', 2: '⚔️', 3: '⭐' };
+                const emojis = emblemNumbers.map(num => emojiMap[num] || '').join('');
+                nameText = emojis + ' ' + extractedUsername + ':';
+                
+                const emojiSize = Math.max(fontSize - 1, 10);
+                nameSpan.style.fontSize = fontSize + 'px';
+                
+                const emojiSpan = document.createElement('span');
+                emojiSpan.textContent = emojis + ' ';
+                emojiSpan.style.cssText = `font-size: ${emojiSize}px !important;`;
+                
+                const textSpan = document.createElement('span');
+                textSpan.textContent = extractedUsername + ':';
+                textSpan.style.cssText = `font-size: ${fontSize}px !important;`;
+                
+                nameSpan.innerHTML = '';
+                nameSpan.appendChild(emojiSpan);
+                nameSpan.appendChild(textSpan);
+            } else {
+                nameSpan.textContent = nameText;
+                nameSpan.style.cssText = `font-size: ${fontSize}px !important;`;
+            }
         }
         
         messageElement.textContent = cleanMessage.trim();
@@ -410,6 +484,14 @@
     };
     
     processAllMessages();
+    
+    setTimeout(() => {
+        processAllMessages();
+        if (colorAdjustEnabled) {
+            reapplyColorAdjustment();
+        }
+    }, 500);
+    setTimeout(processAllMessages, 2000);
     
     const observer = new MutationObserver(mutations => {
         for (const mutation of mutations) {

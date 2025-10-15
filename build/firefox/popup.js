@@ -8,21 +8,59 @@ document.addEventListener('DOMContentLoaded', function() {
     const dividerToggle = document.getElementById('dividerToggle');
     const status = document.getElementById('status');
     
-    browserAPI.storage.sync.get(['backgroundEnabled', 'colorAdjustEnabled', 'fontSize', 'darkModeEnabled', 'dividerEnabled'], (result) => {
-        // Limpiar estados previos
+    function getStorageData(keys) {
+        return new Promise((resolve) => {
+            if (typeof browser !== 'undefined' && browser.storage) {
+                browser.storage.sync.get(keys).then(resolve).catch(() => resolve({}));
+            } else {
+                chrome.storage.sync.get(keys, resolve);
+            }
+        });
+    }
+    
+    function setStorageData(data) {
+        if (typeof browser !== 'undefined' && browser.storage) {
+            browser.storage.sync.set(data).catch(() => {});
+        } else {
+            chrome.storage.sync.set(data);
+        }
+    }
+    
+    function sendMessageToTab(tabId, message) {
+        if (typeof browser !== 'undefined' && browser.tabs) {
+            browser.tabs.sendMessage(tabId, message).catch(() => {});
+        } else {
+            chrome.tabs.sendMessage(tabId, message, () => {
+                if (chrome.runtime.lastError) {
+                    // Ignorar errores silenciosamente
+                }
+            });
+        }
+    }
+    
+    function queryTabs(query) {
+        return new Promise((resolve) => {
+            if (typeof browser !== 'undefined' && browser.tabs) {
+                browser.tabs.query(query).then(resolve).catch(() => resolve([]));
+            } else {
+                chrome.tabs.query(query, resolve);
+            }
+        });
+    }
+    
+    getStorageData(['backgroundEnabled', 'colorAdjustEnabled', 'fontSize', 'darkModeEnabled', 'dividerEnabled']).then((result) => {
         backgroundToggle.classList.remove('active');
         colorAdjustToggle.classList.remove('active');
         darkModeToggle.classList.remove('active');
         dividerToggle.classList.remove('active');
         
-        // Establecer estados según configuración guardada
         if (result.backgroundEnabled !== false) {
             backgroundToggle.classList.add('active');
         }
         if (result.colorAdjustEnabled === true) {
             colorAdjustToggle.classList.add('active');
         }
-        if (result.darkModeEnabled !== false) { // Por defecto activado
+        if (result.darkModeEnabled !== false) {
             darkModeToggle.classList.add('active');
         }
         if (result.dividerEnabled === true) {
@@ -33,48 +71,34 @@ document.addEventListener('DOMContentLoaded', function() {
         fontSizeValue.textContent = fontSize + 'px';
     });
     
+    async function sendMessageToAllTabs(message) {
+        try {
+            const chatTabs = await queryTabs({ url: "*://www.youtube.com/live_chat*" });
+            const activeTabs = await queryTabs({ active: true, currentWindow: true });
+            
+            chatTabs.forEach(tab => sendMessageToTab(tab.id, message));
+            activeTabs.forEach(tab => sendMessageToTab(tab.id, message));
+        } catch (error) {
+            console.error('Error sending message to tabs:', error);
+        }
+    }
+    
     backgroundToggle.addEventListener('click', () => {
         const isActive = backgroundToggle.classList.toggle('active');
-        browserAPI.storage.sync.set({ backgroundEnabled: isActive });
-        const sendMessageToTabs = (tabs) => {
-            tabs.forEach(tab => {
-                browserAPI.tabs.sendMessage(tab.id, {
-                    action: 'toggleBackground',
-                    enabled: isActive
-                }).catch(() => {});
-            });
-        };
-        browserAPI.tabs.query({ url: "*://www.youtube.com/live_chat*" }, sendMessageToTabs);
-        browserAPI.tabs.query({ active: true, currentWindow: true }, (tabs) => {
-            if (tabs[0]) {
-                browserAPI.tabs.sendMessage(tabs[0].id, {
-                    action: 'toggleBackground',
-                    enabled: isActive
-                }).catch(() => {});
-            }
+        setStorageData({ backgroundEnabled: isActive });
+        sendMessageToAllTabs({
+            action: 'toggleBackground',
+            enabled: isActive
         });
         showStatus(isActive ? 'Fondo alternado activado' : 'Fondo alternado desactivado');
     });
     
     colorAdjustToggle.addEventListener('click', () => {
         const isActive = colorAdjustToggle.classList.toggle('active');
-        browserAPI.storage.sync.set({ colorAdjustEnabled: isActive });
-        const sendMessageToTabs = (tabs) => {
-            tabs.forEach(tab => {
-                browserAPI.tabs.sendMessage(tab.id, {
-                    action: 'toggleColorAdjust',
-                    enabled: isActive
-                }).catch(() => {});
-            });
-        };
-        browserAPI.tabs.query({ url: "*://www.youtube.com/live_chat*" }, sendMessageToTabs);
-        browserAPI.tabs.query({ active: true, currentWindow: true }, (tabs) => {
-            if (tabs[0]) {
-                browserAPI.tabs.sendMessage(tabs[0].id, {
-                    action: 'toggleColorAdjust',
-                    enabled: isActive
-                }).catch(() => {});
-            }
+        setStorageData({ colorAdjustEnabled: isActive });
+        sendMessageToAllTabs({
+            action: 'toggleColorAdjust',
+            enabled: isActive
         });
         showStatus(isActive ? 'Ajuste de colores activado' : 'Ajuste de colores desactivado');
     });
@@ -82,69 +106,30 @@ document.addEventListener('DOMContentLoaded', function() {
     fontSizeSlider.addEventListener('input', () => {
         const fontSize = parseInt(fontSizeSlider.value);
         fontSizeValue.textContent = fontSize + 'px';
-        browserAPI.storage.sync.set({ fontSize: fontSize });
-        const sendMessageToTabs = (tabs) => {
-            tabs.forEach(tab => {
-                browserAPI.tabs.sendMessage(tab.id, {
-                    action: 'updateFontSize',
-                    fontSize: fontSize
-                }).catch(() => {});
-            });
-        };
-        browserAPI.tabs.query({ url: "*://www.youtube.com/live_chat*" }, sendMessageToTabs);
-        browserAPI.tabs.query({ active: true, currentWindow: true }, (tabs) => {
-            if (tabs[0]) {
-                browserAPI.tabs.sendMessage(tabs[0].id, {
-                    action: 'updateFontSize',
-                    fontSize: fontSize
-                }).catch(() => {});
-            }
+        setStorageData({ fontSize: fontSize });
+        sendMessageToAllTabs({
+            action: 'updateFontSize',
+            fontSize: fontSize
         });
         showStatus('Tamaño de fuente: ' + fontSize + 'px');
     });
     
     darkModeToggle.addEventListener('click', () => {
         const isActive = darkModeToggle.classList.toggle('active');
-        browserAPI.storage.sync.set({ darkModeEnabled: isActive });
-        const sendMessageToTabs = (tabs) => {
-            tabs.forEach(tab => {
-                browserAPI.tabs.sendMessage(tab.id, {
-                    action: 'toggleDarkMode',
-                    enabled: isActive
-                }).catch(() => {});
-            });
-        };
-        browserAPI.tabs.query({ url: "*://www.youtube.com/live_chat*" }, sendMessageToTabs);
-        browserAPI.tabs.query({ active: true, currentWindow: true }, (tabs) => {
-            if (tabs[0]) {
-                browserAPI.tabs.sendMessage(tabs[0].id, {
-                    action: 'toggleDarkMode',
-                    enabled: isActive
-                }).catch(() => {});
-            }
+        setStorageData({ darkModeEnabled: isActive });
+        sendMessageToAllTabs({
+            action: 'toggleDarkMode',
+            enabled: isActive
         });
         showStatus(isActive ? 'Modo oscuro activado' : 'Modo claro activado');
     });
     
     dividerToggle.addEventListener('click', () => {
         const isActive = dividerToggle.classList.toggle('active');
-        browserAPI.storage.sync.set({ dividerEnabled: isActive });
-        const sendMessageToTabs = (tabs) => {
-            tabs.forEach(tab => {
-                browserAPI.tabs.sendMessage(tab.id, {
-                    action: 'toggleDivider',
-                    enabled: isActive
-                }).catch(() => {});
-            });
-        };
-        browserAPI.tabs.query({ url: "*://www.youtube.com/live_chat*" }, sendMessageToTabs);
-        browserAPI.tabs.query({ active: true, currentWindow: true }, (tabs) => {
-            if (tabs[0]) {
-                browserAPI.tabs.sendMessage(tabs[0].id, {
-                    action: 'toggleDivider',
-                    enabled: isActive
-                }).catch(() => {});
-            }
+        setStorageData({ dividerEnabled: isActive });
+        sendMessageToAllTabs({
+            action: 'toggleDivider',
+            enabled: isActive
         });
         showStatus(isActive ? 'Líneas divisorias activadas' : 'Líneas divisorias desactivadas');
     });
