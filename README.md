@@ -1,4 +1,4 @@
-# 🌙 TsukiChat
+# TsukiChat
 
 > **Extensión que traduce mensajes del chat de YouTube Live y los adapta a un formato similar al de Twitch.**
 
@@ -6,29 +6,38 @@ El objetivo que busco con esta extensión es poder resubir los Chats de Twitch a
 
 ---
 
-> ⚠️ **TODO:** AÑADIR DOS FOTOS DE LO QUE HACE LA EXTENSIÓN, UNA DEL CHAT SIN LA EXTENSIÓN Y OTRA DEL CHAT CON LA EXTENSIÓN, LAS FOTOS DEBEN TENER UN FOOTER CADA UNA Y ESTAR UNA AL LADO DE LA OTRA
+## 🖼️ Comparación Visual
+
+<div align="center">
+
+| **Sin TsukiChat** | **Con TsukiChat** |
+|:---:|:---:|
+| ![Chat sin extensión](capturas/sin_extension.png) | ![Chat con extensión](capturas/con_extension.png) |
+| *Chat básico de YouTube* | *Chat estilo Twitch con badges y formato* |
+
+</div>
 
 ---
 
-## 📥 Instalación
+## Instalación
 
-### 🌐 Chrome/Edge
+### Chrome/Edge/Opera..
 [![Chrome Web Store](https://img.shields.io/badge/Instalar_desde-Chrome_Web_Store-4285f4?style=for-the-badge&logo=googlechrome)](https://chromewebstore.google.com/detail/tsukichat/dojcelbefjhbapbhgkplifhcfblpgaab)
 
-### 🦊 Firefox  
+### Firefox  
 [![Firefox Add-ons](https://img.shields.io/badge/Instalar_desde-Firefox_Add--ons-ff6611?style=for-the-badge&logo=firefox)](https://chromewebstore.google.com/detail/tsukichat/dojcelbefjhbapbhgkplifhcfblpgaab)
 
-## 🚀 Uso
+## Uso
 
-### 🔗 Aplicación para clonar los mensajes
+### Aplicación para clonar los mensajes
 
 Usa cualquier aplicación que pueda leer mensajes de Twitch y enviar mensajes a YouTube:
 
-- 🎯 **[SAMMI.solutions](https://sammi.solutions/)** *(os dejo el Deck ya hecho en los archivos del proyecto para que podáis importarlo)*
+- **[SAMMI.solutions](https://sammi.solutions/)** *(os dejo el Deck ya hecho en los archivos del proyecto para que podáis importarlo)*
 
-- 🤖 **[Streamer.bot](https://streamer.bot/)** *(tenéis que hacerlo vosotros, pero es sencillo seguro que podéis ❤️)*
+- **[Streamer.bot](https://streamer.bot/)** *(tenéis que hacerlo vosotros, pero es sencillo seguro que podéis ❤️)*
 
-### 💬 Formato de mensaje
+### Formato de mensaje
 
 Con alguna de esas aplicaciones debes obtener la información del mensaje recibido de Twitch y clonarlo a YouTube con este formato:
 
@@ -37,17 +46,17 @@ BADGES#COLOR[USERNAME]MESSAGE
 ```
 **Ejemplo:** `0#FF5733[TsukiSoft]¡Hola mundo!`
 
-#### 🏷️ Badges disponibles:
+#### Badges disponibles:
 | Badge | Tipo |
 |:---:|:---|
-| `0` | 👑 Streamer |
-| `1` | 💎 VIP |
-| `2` | 🛡️ Moderador |
-| `3` | ⭐ Suscriptor |
+| `0` | Streamer |
+| `1` | VIP |
+| `2` | Moderador |
+| `3` | Suscriptor |
 
 ---
 
-### 🎉 Formato de eventos
+### Formato de eventos
 
 Para eventos más de lo mismo, obtén la información del evento recibido en Twitch y clónalo a YouTube de esta forma:
 
@@ -56,34 +65,26 @@ PREFIJO_[USERNAME][DATA]
 ```
 **Ejemplo:** `sub_[TsukiSoft]se acaba de suscribir x23 meses!`
 
-#### 🎊 Prefijos disponibles:
+#### Prefijos disponibles:
 | Prefijo | Evento |
 |:---:|:---|
-| `sub` | 🟣 Suscripción |
-| `bit` | 💎 Bits/Cheers |
-| `raid` | ⚔️ Raid |
-| `gifted` | 🎁 Subs regaladas |
-| `kofi` | ☕ Ko-fi |
+| `sub` | Suscripción |
+| `bit` | Bits/Cheers |
+| `raid` | Raid |
+| `gifted` | Subs regaladas |
+| `kofi` | Donaciones |
 
-## ⚙️ Configuración
+## Configuración
 
 En el popup puedes activar/desactivar:
 
 | Función | Descripción |
 |:---:|:---|
-| 🌙 | **Modo oscuro/claro** |
-| 🎨 | **Fondos alternados** |
-| 📏 | **Líneas divisorias** |
-| 🔤 | **Ajuste de colores** |
-| 📐 | **Tamaño de fuente** |
-| ⏰ | **Timestamps** |
-| 🏷️ | **Badges individuales** |
-| 😀 | **Emotes 7TV** |
-
----
-
-<div align="center">
-
-**⭐ ¿Te gusta TsukiChat? ¡Dale una estrella al repo! ⭐**
-
-</div>
+| **Modo oscuro/claro** |
+| **Fondos alternados** |
+| **Líneas divisorias** |
+| **Ajuste de colores** |
+| **Tamaño de fuente** |
+| **Timestamps** |
+| **Badges individuales** |
+| **Emotes 7TV** |
