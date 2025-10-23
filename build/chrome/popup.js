@@ -12,9 +12,12 @@ document.addEventListener('DOMContentLoaded', function() {
     const badge1Toggle = document.getElementById('badge1Toggle');
     const badge2Toggle = document.getElementById('badge2Toggle');
     const badge3Toggle = document.getElementById('badge3Toggle');
+    const emotesToggle = document.getElementById('emotesToggle');
+    const emoteOptions = document.getElementById('emoteOptions');
+    const emoteSetId = document.getElementById('emoteSetId');
     const status = document.getElementById('status');
     
-    chrome.storage.sync.get(['backgroundEnabled', 'colorAdjustEnabled', 'fontSize', 'darkModeEnabled', 'dividerEnabled', 'timestampsEnabled', 'badgesEnabled', 'badgeVisibility'], (result) => {
+    chrome.storage.sync.get(['backgroundEnabled', 'colorAdjustEnabled', 'fontSize', 'darkModeEnabled', 'dividerEnabled', 'timestampsEnabled', 'badgesEnabled', 'badgeVisibility', 'emotesEnabled', 'emoteSetId'], (result) => {
         backgroundToggle.classList.remove('active');
         colorAdjustToggle.classList.remove('active');
         darkModeToggle.classList.remove('active');
@@ -25,6 +28,7 @@ document.addEventListener('DOMContentLoaded', function() {
         badge1Toggle.classList.remove('active');
         badge2Toggle.classList.remove('active');
         badge3Toggle.classList.remove('active');
+        emotesToggle.classList.remove('active');
         
         if (result.backgroundEnabled !== false) {
             backgroundToggle.classList.add('active');
@@ -45,6 +49,10 @@ document.addEventListener('DOMContentLoaded', function() {
             badgesToggle.classList.add('active');
             badgeOptions.style.display = 'block';
         }
+        if (result.emotesEnabled !== false) {
+            emotesToggle.classList.add('active');
+            emoteOptions.style.display = 'block';
+        }
         
         const badgeVisibility = result.badgeVisibility || { 0: true, 1: true, 2: true, 3: true };
         if (badgeVisibility[0]) badge0Toggle.classList.add('active');
@@ -55,6 +63,8 @@ document.addEventListener('DOMContentLoaded', function() {
         const fontSize = result.fontSize || 14;
         fontSizeSlider.value = fontSize;
         fontSizeValue.textContent = fontSize + 'px';
+        
+        emoteSetId.value = result.emoteSetId || '01J7B66AR800095HSJ1PN3Z3JB';
     });
     
     backgroundToggle.addEventListener('click', () => {
@@ -255,6 +265,62 @@ document.addEventListener('DOMContentLoaded', function() {
     badge1Toggle.addEventListener('click', createBadgeToggleListener(1, badge1Toggle));
     badge2Toggle.addEventListener('click', createBadgeToggleListener(2, badge2Toggle));
     badge3Toggle.addEventListener('click', createBadgeToggleListener(3, badge3Toggle));
+    
+    // Emotes functionality
+    emotesToggle.addEventListener('click', () => {
+        const isActive = emotesToggle.classList.toggle('active');
+        chrome.storage.sync.set({ emotesEnabled: isActive });
+        
+        if (isActive) {
+            emoteOptions.style.display = 'block';
+        } else {
+            emoteOptions.style.display = 'none';
+        }
+        
+        chrome.tabs.query({ url: "*://www.youtube.com/live_chat*" }, (tabs) => {
+            tabs.forEach(tab => {
+                chrome.tabs.sendMessage(tab.id, {
+                    action: 'toggleEmotes',
+                    enabled: isActive
+                }).catch(() => {});
+            });
+        });
+        chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+            if (tabs[0]) {
+                chrome.tabs.sendMessage(tabs[0].id, {
+                    action: 'toggleEmotes',
+                    enabled: isActive
+                }).catch(() => {});
+            }
+        });
+        showStatus(isActive ? 'Emotes activados' : 'Emotes desactivados');
+    });
+    
+    // Save emote set ID when changed and load emotes automatically
+    emoteSetId.addEventListener('input', () => {
+        const setId = emoteSetId.value.trim();
+        chrome.storage.sync.set({ emoteSetId: setId });
+        
+        // Auto-load emotes if emotes are enabled and ID is valid
+        if (setId && emotesToggle.classList.contains('active')) {
+            chrome.tabs.query({ url: "*://www.youtube.com/live_chat*" }, (tabs) => {
+                tabs.forEach(tab => {
+                    chrome.tabs.sendMessage(tab.id, {
+                        action: 'updateEmoteSetId',
+                        emoteSetId: setId
+                    }).catch(() => {});
+                });
+            });
+            chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+                if (tabs[0]) {
+                    chrome.tabs.sendMessage(tabs[0].id, {
+                        action: 'updateEmoteSetId',
+                        emoteSetId: setId
+                    }).catch(() => {});
+                }
+            });
+        }
+    });
     
     function showStatus(message, isError = false) {
         status.textContent = message;

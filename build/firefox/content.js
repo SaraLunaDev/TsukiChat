@@ -20,8 +20,11 @@
     let timestampsEnabled = true;
     let badgesEnabled = true;
     let badgeVisibility = { 0: true, 1: true, 2: true, 3: true };
+    let emotesEnabled = true; // Activado por defecto
+    let emoteSetId = '01J7B66AR800095HSJ1PN3Z3JB';
+    let emotesData = new Map(); // Store emote names -> emote data
     
-    browserAPI.storage.sync.get(['backgroundEnabled', 'colorAdjustEnabled', 'fontSize', 'darkModeEnabled', 'dividerEnabled', 'timestampsEnabled', 'badgesEnabled', 'badgeVisibility'], (result) => {
+    browserAPI.storage.sync.get(['backgroundEnabled', 'colorAdjustEnabled', 'fontSize', 'darkModeEnabled', 'dividerEnabled', 'timestampsEnabled', 'badgesEnabled', 'badgeVisibility', 'emotesEnabled', 'emoteSetId'], (result) => {
         if (browserAPI.runtime.lastError) {
             console.error('Storage error:', browserAPI.runtime.lastError);
             return;
@@ -34,6 +37,9 @@
         timestampsEnabled = result.timestampsEnabled !== false;
         badgesEnabled = result.badgesEnabled !== false;
         badgeVisibility = result.badgeVisibility || { 0: true, 1: true, 2: true, 3: true };
+        emotesEnabled = result.emotesEnabled !== false; // Activado por defecto
+        emoteSetId = result.emoteSetId || '01J7B66AR800095HSJ1PN3Z3JB';
+        
         updateBackgroundStyles();
         updateFontSize();
         updateChatTheme();
@@ -43,6 +49,10 @@
         
         if (colorAdjustEnabled) {
             reapplyColorAdjustment();
+        }
+        
+        if (emotesEnabled) {
+            loadEmotesFromAPI(emoteSetId);
         }
     });
     
@@ -82,6 +92,35 @@
             badgeVisibility[message.badgeId] = message.enabled;
             updateBadgesVisibility();
             sendResponse({ success: true });
+        } else if (message.action === 'toggleEmotes') {
+            emotesEnabled = message.enabled;
+            if (emotesEnabled && emotesData.size === 0) {
+                loadEmotesFromAPI(emoteSetId);
+            } else {
+                // Reprocesar todos los mensajes para mostrar/ocultar emotes dinámicamente
+                reprocessAllMessagesForEmotes();
+            }
+            sendResponse({ success: true });
+        } else if (message.action === 'updateEmoteSetId') {
+            emoteSetId = message.emoteSetId;
+            if (emotesEnabled) {
+                loadEmotesFromAPI(emoteSetId).then(result => {
+                    sendResponse(result);
+                }).catch(error => {
+                    sendResponse({ success: false, error: error.message });
+                });
+                return true; // Keep message channel open for async response
+            } else {
+                sendResponse({ success: true, message: 'ID actualizado (emotes desactivados)' });
+            }
+        } else if (message.action === 'loadEmotes') {
+            emoteSetId = message.emoteSetId;
+            loadEmotesFromAPI(emoteSetId).then(result => {
+                sendResponse(result);
+            }).catch(error => {
+                sendResponse({ success: false, error: error.message });
+            });
+            return true; // Keep message channel open for async response
         }
         return true;
     });
@@ -464,6 +503,123 @@
         });
     };
     
+    const loadEmotesFromAPI = async (setId) => {
+        try {
+            const response = await fetch(`https://7tv.io/v3/emote-sets/${setId}`);
+            if (!response.ok) {
+                throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+            }
+            
+            const data = await response.json();
+            emotesData.clear();
+            
+            if (data.emotes && Array.isArray(data.emotes)) {
+                data.emotes.forEach(emote => {
+                    if (emote.name && emote.id) {
+                        // Almacenar con el nombre exacto (case-sensitive) - usar datos fuera de 'data'
+                        emotesData.set(emote.name, {
+                            id: emote.id,
+                            name: emote.name,
+                            animated: emote.data?.animated || false
+                        });
+                    }
+                });
+            }
+            
+            // Reprocesar automáticamente todos los mensajes cuando se cargan nuevos emotes
+            if (emotesEnabled) {
+                reprocessAllMessagesForEmotes();
+            }
+            
+            return { 
+                success: true, 
+                count: emotesData.size,
+                message: `Cargados ${emotesData.size} emotes correctamente`
+            };
+        } catch (error) {
+            console.error('Error loading emotes:', error);
+            return { 
+                success: false, 
+                error: `Error cargando emotes: ${error.message}`,
+                count: 0
+            };
+        }
+    };
+    
+    const reprocessAllMessagesForEmotes = () => {
+        // Reprocesar solo la parte de emotes de los mensajes ya procesados
+        document.querySelectorAll('yt-live-chat-text-message-renderer[data-tsuki-processed="true"]:not([data-tsuki-event])').forEach(message => {
+            const messageElement = message.querySelector('#message');
+            if (!messageElement || !messageElement.dataset.originalText) return;
+            
+            // Obtener el mensaje limpio original
+            const originalText = messageElement.dataset.originalText;
+            const match = originalText.match(/^([0-3]*)?#([A-Fa-f0-9]{6})\[([^\]]+)\](.*)$/);
+            if (!match) return;
+            
+            const cleanMessage = match[4];
+            
+            // Procesar emotes en el mensaje limpio
+            if (emotesEnabled && emotesData.size > 0) {
+                const processedMessage = processEmotesInText(cleanMessage.trim());
+                if (processedMessage !== cleanMessage.trim()) {
+                    messageElement.innerHTML = processedMessage;
+                } else {
+                    messageElement.textContent = cleanMessage.trim();
+                }
+            } else {
+                // Si emotes están desactivados, mostrar solo texto
+                messageElement.textContent = cleanMessage.trim();
+            }
+        });
+        
+        // También reprocesar eventos
+        document.querySelectorAll('yt-live-chat-text-message-renderer[data-tsuki-event="true"]').forEach(message => {
+            const messageElement = message.querySelector('#message');
+            if (!messageElement) return;
+            
+            const eventContainer = messageElement.querySelector('.tsuki-event-container');
+            if (!eventContainer) return;
+            
+            const dataElement = eventContainer.querySelector('.tsuki-event-data');
+            if (!dataElement || !dataElement.dataset.originalEventText) return;
+            
+            const originalEventText = dataElement.dataset.originalEventText;
+            
+            // Procesar emotes en el texto del evento
+            if (emotesEnabled && emotesData.size > 0) {
+                const processedEventText = processEmotesInText(originalEventText);
+                if (processedEventText !== originalEventText) {
+                    dataElement.innerHTML = processedEventText;
+                } else {
+                    dataElement.textContent = originalEventText;
+                }
+            } else {
+                dataElement.textContent = originalEventText;
+            }
+        });
+    };
+    
+    const processEmotesInText = (text) => {
+        if (!emotesEnabled || emotesData.size === 0) {
+            return text;
+        }
+        
+        const words = text.split(/(\s+)/);
+        const processedWords = words.map(word => {
+            const trimmedWord = word.trim();
+            // Buscar emote con nombre exacto (case-sensitive)
+            if (trimmedWord && emotesData.has(trimmedWord)) {
+                const emoteData = emotesData.get(trimmedWord);
+                const emoteUrl = `https://cdn.7tv.app/emote/${emoteData.id}/1x.avif`;
+                return `<img src="${emoteUrl}" alt="${emoteData.name}" title="${emoteData.name}" style="height: ${fontSize + 4}px; vertical-align: middle; margin: 0 1px;" onerror="this.style.display='none';">`;
+            }
+            return word;
+        });
+        
+        return processedWords.join('');
+    };
+    
     const processMessage = message => {
         if (message.dataset.tsukiProcessed) return;
         
@@ -500,6 +656,9 @@
             const dataElement = document.createElement('div');
             dataElement.className = 'tsuki-event-data';
             
+            // Guardar el texto original del evento para reprocesamiento dinámico
+            dataElement.dataset.originalEventText = eventText;
+            
             const multiplierElement = document.createElement('span');
             multiplierElement.className = 'tsuki-event-multiplier';
             multiplierElement.textContent = multiplier;
@@ -513,6 +672,25 @@
                 multiplierElement.textContent = multiplier;
             } else {
                 dataElement.textContent = eventData;
+            }
+            
+            if (emotesEnabled && emotesData.size > 0) {
+                const processedEventText = processEmotesInText(eventText);
+                if (processedEventText !== eventText) {
+                    if (multiplier) {
+                        dataElement.innerHTML = processedEventText + ' ';
+                        dataElement.appendChild(multiplierElement);
+                        if (additionalText) {
+                            dataElement.appendChild(document.createTextNode(' ' + additionalText));
+                        }
+                        multiplierElement.textContent = multiplier;
+                    } else {
+                        const processedEventData = processEmotesInText(eventData);
+                        if (processedEventData !== eventData) {
+                            dataElement.innerHTML = processedEventData;
+                        }
+                    }
+                }
             }
             
             eventContainer.appendChild(usernameElement);
@@ -549,7 +727,7 @@
             };
             
             iconElement.appendChild(img);
-            
+
             const contentElement = message.querySelector('#content');
             if (contentElement) {
                 contentElement.insertBefore(iconElement, messageElement);
@@ -673,6 +851,13 @@
         
         messageElement.textContent = cleanMessage.trim();
         
+        if (emotesEnabled && emotesData.size > 0) {
+            const processedMessage = processEmotesInText(cleanMessage.trim());
+            if (processedMessage !== cleanMessage.trim()) {
+                messageElement.innerHTML = processedMessage;
+            }
+        }
+        
         const authorPhoto = message.querySelector('#author-photo');
         if (authorPhoto) authorPhoto.style.display = 'none';
     };
@@ -693,14 +878,15 @@
     setTimeout(() => {
         processAllMessages();
         updateTimestampsVisibility();
-    }, 2000);    const observer = new MutationObserver(mutations => {
+    }, 2000);
+    
+    const observer = new MutationObserver(mutations => {
         for (const mutation of mutations) {
             if (mutation.type === 'childList') {
                 for (const node of mutation.addedNodes) {
                     if (node.nodeType === 1) {
                         if (node.tagName === 'YT-LIVE-CHAT-TEXT-MESSAGE-RENDERER') {
                             processMessage(node);
-                            // Apply timestamp visibility to the new message
                             const timestamp = node.querySelector('#timestamp');
                             if (timestamp) {
                                 timestamp.style.display = timestampsEnabled ? '' : 'none';
@@ -708,7 +894,6 @@
                         } else if (node.querySelector) {
                             node.querySelectorAll('yt-live-chat-text-message-renderer:not([data-tsuki-processed])').forEach(msg => {
                                 processMessage(msg);
-                                // Apply timestamp visibility to each new message
                                 const timestamp = msg.querySelector('#timestamp');
                                 if (timestamp) {
                                     timestamp.style.display = timestampsEnabled ? '' : 'none';

@@ -175,7 +175,6 @@
 			<span>Mostrar emblemas</span>
 			<div class="toggle" id="badgesToggle"></div>
 		</div>
-	</div>
 		<div id="badgeOptions" style="display: none; margin-top: 12px; padding-top: 12px; border-top: 1px solid #444;">
 			<div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
 				<div class="badge-option">
@@ -205,8 +204,21 @@
 			</div>
 		</div>
 	</div>
+	<div class="section">
+		<div class="toggle-container">
+			<span>Activar emotes</span>
+			<div class="toggle" id="emotesToggle"></div>
+		</div>
+		<div id="emoteOptions" style="display: none; margin-top: 12px; padding-top: 12px; border-top: 1px solid #444;">
+			<div style="margin-bottom: 8px;">
+				<span style="font-size: 11px; color: #ccc; display: block; margin-bottom: 4px;">ID del Emote Set:</span>
+				<input type="text" id="emoteSetId" placeholder="01J7B66AR800095HSJ1PN3Z3JB"
+					style="width: 100%; padding: 6px; background: #1a1a1a; border: 1px solid #444; border-radius: 4px; color: #fff; font-size: 11px; box-sizing: border-box;" />
+			</div>
+		</div>
+	</div>
 	<div class="status" id="status">Configuración lista</div>
-	<script src="popup_firefox.js"></script>
+	<script src="popup.js"></script>
 </body>
 
 </html>

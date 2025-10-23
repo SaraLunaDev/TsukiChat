@@ -13,49 +13,12 @@ document.addEventListener('DOMContentLoaded', function() {
     const badge1Toggle = document.getElementById('badge1Toggle');
     const badge2Toggle = document.getElementById('badge2Toggle');
     const badge3Toggle = document.getElementById('badge3Toggle');
+    const emotesToggle = document.getElementById('emotesToggle');
+    const emoteOptions = document.getElementById('emoteOptions');
+    const emoteSetId = document.getElementById('emoteSetId');
     const status = document.getElementById('status');
     
-    function getStorageData(keys) {
-        return new Promise((resolve) => {
-            if (typeof browser !== 'undefined' && browser.storage) {
-                browser.storage.sync.get(keys).then(resolve).catch(() => resolve({}));
-            } else {
-                chrome.storage.sync.get(keys, resolve);
-            }
-        });
-    }
-    
-    function setStorageData(data) {
-        if (typeof browser !== 'undefined' && browser.storage) {
-            browser.storage.sync.set(data).catch(() => {});
-        } else {
-            chrome.storage.sync.set(data);
-        }
-    }
-    
-    function sendMessageToTab(tabId, message) {
-        if (typeof browser !== 'undefined' && browser.tabs) {
-            browser.tabs.sendMessage(tabId, message).catch(() => {});
-        } else {
-            chrome.tabs.sendMessage(tabId, message, () => {
-                if (chrome.runtime.lastError) {
-                    // Ignorar errores silenciosamente
-                }
-            });
-        }
-    }
-    
-    function queryTabs(query) {
-        return new Promise((resolve) => {
-            if (typeof browser !== 'undefined' && browser.tabs) {
-                browser.tabs.query(query).then(resolve).catch(() => resolve([]));
-            } else {
-                chrome.tabs.query(query, resolve);
-            }
-        });
-    }
-    
-    getStorageData(['backgroundEnabled', 'colorAdjustEnabled', 'fontSize', 'darkModeEnabled', 'dividerEnabled', 'timestampsEnabled', 'badgesEnabled', 'badgeVisibility']).then((result) => {
+    browserAPI.storage.sync.get(['backgroundEnabled', 'colorAdjustEnabled', 'fontSize', 'darkModeEnabled', 'dividerEnabled', 'timestampsEnabled', 'badgesEnabled', 'badgeVisibility', 'emotesEnabled', 'emoteSetId'], (result) => {
         backgroundToggle.classList.remove('active');
         colorAdjustToggle.classList.remove('active');
         darkModeToggle.classList.remove('active');
@@ -66,6 +29,7 @@ document.addEventListener('DOMContentLoaded', function() {
         badge1Toggle.classList.remove('active');
         badge2Toggle.classList.remove('active');
         badge3Toggle.classList.remove('active');
+        emotesToggle.classList.remove('active');
         
         if (result.backgroundEnabled !== false) {
             backgroundToggle.classList.add('active');
@@ -86,6 +50,10 @@ document.addEventListener('DOMContentLoaded', function() {
             badgesToggle.classList.add('active');
             badgeOptions.style.display = 'block';
         }
+        if (result.emotesEnabled !== false) {
+            emotesToggle.classList.add('active');
+            emoteOptions.style.display = 'block';
+        }
         
         const badgeVisibility = result.badgeVisibility || { 0: true, 1: true, 2: true, 3: true };
         if (badgeVisibility[0]) badge0Toggle.classList.add('active');
@@ -96,36 +64,50 @@ document.addEventListener('DOMContentLoaded', function() {
         const fontSize = result.fontSize || 14;
         fontSizeSlider.value = fontSize;
         fontSizeValue.textContent = fontSize + 'px';
+        
+        emoteSetId.value = result.emoteSetId || '01J7B66AR800095HSJ1PN3Z3JB';
     });
-    
-    async function sendMessageToAllTabs(message) {
-        try {
-            const chatTabs = await queryTabs({ url: "*://www.youtube.com/live_chat*" });
-            const activeTabs = await queryTabs({ active: true, currentWindow: true });
-            
-            chatTabs.forEach(tab => sendMessageToTab(tab.id, message));
-            activeTabs.forEach(tab => sendMessageToTab(tab.id, message));
-        } catch (error) {
-            console.error('Error sending message to tabs:', error);
-        }
-    }
     
     backgroundToggle.addEventListener('click', () => {
         const isActive = backgroundToggle.classList.toggle('active');
-        setStorageData({ backgroundEnabled: isActive });
-        sendMessageToAllTabs({
-            action: 'toggleBackground',
-            enabled: isActive
+        browserAPI.storage.sync.set({ backgroundEnabled: isActive });
+        browserAPI.tabs.query({ url: "*://www.youtube.com/live_chat*" }, (tabs) => {
+            tabs.forEach(tab => {
+                browserAPI.tabs.sendMessage(tab.id, {
+                    action: 'toggleBackground',
+                    enabled: isActive
+                }).catch(() => {});
+            });
+        });
+        browserAPI.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+            if (tabs[0]) {
+                browserAPI.tabs.sendMessage(tabs[0].id, {
+                    action: 'toggleBackground',
+                    enabled: isActive
+                }).catch(() => {});
+            }
         });
         showStatus(isActive ? 'Fondo alternado activado' : 'Fondo alternado desactivado');
     });
     
     colorAdjustToggle.addEventListener('click', () => {
         const isActive = colorAdjustToggle.classList.toggle('active');
-        setStorageData({ colorAdjustEnabled: isActive });
-        sendMessageToAllTabs({
-            action: 'toggleColorAdjust',
-            enabled: isActive
+        browserAPI.storage.sync.set({ colorAdjustEnabled: isActive });
+        browserAPI.tabs.query({ url: "*://www.youtube.com/live_chat*" }, (tabs) => {
+            tabs.forEach(tab => {
+                browserAPI.tabs.sendMessage(tab.id, {
+                    action: 'toggleColorAdjust',
+                    enabled: isActive
+                }).catch(() => {});
+            });
+        });
+        browserAPI.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+            if (tabs[0]) {
+                browserAPI.tabs.sendMessage(tabs[0].id, {
+                    action: 'toggleColorAdjust',
+                    enabled: isActive
+                }).catch(() => {});
+            }
         });
         showStatus(isActive ? 'Ajuste de colores activado' : 'Ajuste de colores desactivado');
     });
@@ -133,47 +115,95 @@ document.addEventListener('DOMContentLoaded', function() {
     fontSizeSlider.addEventListener('input', () => {
         const fontSize = parseInt(fontSizeSlider.value);
         fontSizeValue.textContent = fontSize + 'px';
-        setStorageData({ fontSize: fontSize });
-        sendMessageToAllTabs({
-            action: 'updateFontSize',
-            fontSize: fontSize
+        browserAPI.storage.sync.set({ fontSize: fontSize });
+        browserAPI.tabs.query({ url: "*://www.youtube.com/live_chat*" }, (tabs) => {
+            tabs.forEach(tab => {
+                browserAPI.tabs.sendMessage(tab.id, {
+                    action: 'updateFontSize',
+                    fontSize: fontSize
+                }).catch(() => {});
+            });
+        });
+        browserAPI.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+            if (tabs[0]) {
+                browserAPI.tabs.sendMessage(tabs[0].id, {
+                    action: 'updateFontSize',
+                    fontSize: fontSize
+                }).catch(() => {});
+            }
         });
         showStatus('Tamaño de fuente: ' + fontSize + 'px');
     });
     
     darkModeToggle.addEventListener('click', () => {
         const isActive = darkModeToggle.classList.toggle('active');
-        setStorageData({ darkModeEnabled: isActive });
-        sendMessageToAllTabs({
-            action: 'toggleDarkMode',
-            enabled: isActive
+        browserAPI.storage.sync.set({ darkModeEnabled: isActive });
+        browserAPI.tabs.query({ url: "*://www.youtube.com/live_chat*" }, (tabs) => {
+            tabs.forEach(tab => {
+                browserAPI.tabs.sendMessage(tab.id, {
+                    action: 'toggleDarkMode',
+                    enabled: isActive
+                }).catch(() => {});
+            });
+        });
+        browserAPI.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+            if (tabs[0]) {
+                browserAPI.tabs.sendMessage(tabs[0].id, {
+                    action: 'toggleDarkMode',
+                    enabled: isActive
+                }).catch(() => {});
+            }
         });
         showStatus(isActive ? 'Modo oscuro activado' : 'Modo claro activado');
     });
     
     dividerToggle.addEventListener('click', () => {
         const isActive = dividerToggle.classList.toggle('active');
-        setStorageData({ dividerEnabled: isActive });
-        sendMessageToAllTabs({
-            action: 'toggleDivider',
-            enabled: isActive
+        browserAPI.storage.sync.set({ dividerEnabled: isActive });
+        browserAPI.tabs.query({ url: "*://www.youtube.com/live_chat*" }, (tabs) => {
+            tabs.forEach(tab => {
+                browserAPI.tabs.sendMessage(tab.id, {
+                    action: 'toggleDivider',
+                    enabled: isActive
+                }).catch(() => {});
+            });
+        });
+        browserAPI.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+            if (tabs[0]) {
+                browserAPI.tabs.sendMessage(tabs[0].id, {
+                    action: 'toggleDivider',
+                    enabled: isActive
+                }).catch(() => {});
+            }
         });
         showStatus(isActive ? 'Líneas divisorias activadas' : 'Líneas divisorias desactivadas');
     });
     
     timestampsToggle.addEventListener('click', () => {
         const isActive = timestampsToggle.classList.toggle('active');
-        setStorageData({ timestampsEnabled: isActive });
-        sendMessageToAllTabs({
-            action: 'toggleTimestamps',
-            enabled: isActive
+        browserAPI.storage.sync.set({ timestampsEnabled: isActive });
+        browserAPI.tabs.query({ url: "*://www.youtube.com/live_chat*" }, (tabs) => {
+            tabs.forEach(tab => {
+                browserAPI.tabs.sendMessage(tab.id, {
+                    action: 'toggleTimestamps',
+                    enabled: isActive
+                }).catch(() => {});
+            });
+        });
+        browserAPI.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+            if (tabs[0]) {
+                browserAPI.tabs.sendMessage(tabs[0].id, {
+                    action: 'toggleTimestamps',
+                    enabled: isActive
+                }).catch(() => {});
+            }
         });
         showStatus(isActive ? 'Tiempo activado' : 'Tiempo desactivado');
     });
     
     badgesToggle.addEventListener('click', () => {
         const isActive = badgesToggle.classList.toggle('active');
-        setStorageData({ badgesEnabled: isActive });
+        browserAPI.storage.sync.set({ badgesEnabled: isActive });
         
         if (isActive) {
             badgeOptions.style.display = 'block';
@@ -181,9 +211,21 @@ document.addEventListener('DOMContentLoaded', function() {
             badgeOptions.style.display = 'none';
         }
         
-        sendMessageToAllTabs({
-            action: 'toggleBadges',
-            enabled: isActive
+        browserAPI.tabs.query({ url: "*://www.youtube.com/live_chat*" }, (tabs) => {
+            tabs.forEach(tab => {
+                browserAPI.tabs.sendMessage(tab.id, {
+                    action: 'toggleBadges',
+                    enabled: isActive
+                }).catch(() => {});
+            });
+        });
+        browserAPI.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+            if (tabs[0]) {
+                browserAPI.tabs.sendMessage(tabs[0].id, {
+                    action: 'toggleBadges',
+                    enabled: isActive
+                }).catch(() => {});
+            }
         });
         showStatus(isActive ? 'Badges activados' : 'Badges desactivados');
     });
@@ -192,15 +234,28 @@ document.addEventListener('DOMContentLoaded', function() {
         return () => {
             const isActive = badgeToggle.classList.toggle('active');
             
-            getStorageData(['badgeVisibility']).then((result) => {
+            browserAPI.storage.sync.get(['badgeVisibility'], (result) => {
                 const badgeVisibility = result.badgeVisibility || { 0: true, 1: true, 2: true, 3: true };
                 badgeVisibility[badgeId] = isActive;
-                setStorageData({ badgeVisibility: badgeVisibility });
+                browserAPI.storage.sync.set({ badgeVisibility: badgeVisibility });
                 
-                sendMessageToAllTabs({
-                    action: 'toggleBadgeVisibility',
-                    badgeId: badgeId,
-                    enabled: isActive
+                browserAPI.tabs.query({ url: "*://www.youtube.com/live_chat*" }, (tabs) => {
+                    tabs.forEach(tab => {
+                        browserAPI.tabs.sendMessage(tab.id, {
+                            action: 'toggleBadgeVisibility',
+                            badgeId: badgeId,
+                            enabled: isActive
+                        }).catch(() => {});
+                    });
+                });
+                browserAPI.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+                    if (tabs[0]) {
+                        browserAPI.tabs.sendMessage(tabs[0].id, {
+                            action: 'toggleBadgeVisibility',
+                            badgeId: badgeId,
+                            enabled: isActive
+                        }).catch(() => {});
+                    }
                 });
                 showStatus(`Badge ${badgeId} ${isActive ? 'activado' : 'desactivado'}`);
             });
@@ -211,6 +266,62 @@ document.addEventListener('DOMContentLoaded', function() {
     badge1Toggle.addEventListener('click', createBadgeToggleListener(1, badge1Toggle));
     badge2Toggle.addEventListener('click', createBadgeToggleListener(2, badge2Toggle));
     badge3Toggle.addEventListener('click', createBadgeToggleListener(3, badge3Toggle));
+    
+    // Emotes functionality
+    emotesToggle.addEventListener('click', () => {
+        const isActive = emotesToggle.classList.toggle('active');
+        browserAPI.storage.sync.set({ emotesEnabled: isActive });
+        
+        if (isActive) {
+            emoteOptions.style.display = 'block';
+        } else {
+            emoteOptions.style.display = 'none';
+        }
+        
+        browserAPI.tabs.query({ url: "*://www.youtube.com/live_chat*" }, (tabs) => {
+            tabs.forEach(tab => {
+                browserAPI.tabs.sendMessage(tab.id, {
+                    action: 'toggleEmotes',
+                    enabled: isActive
+                }).catch(() => {});
+            });
+        });
+        browserAPI.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+            if (tabs[0]) {
+                browserAPI.tabs.sendMessage(tabs[0].id, {
+                    action: 'toggleEmotes',
+                    enabled: isActive
+                }).catch(() => {});
+            }
+        });
+        showStatus(isActive ? 'Emotes activados' : 'Emotes desactivados');
+    });
+    
+    // Save emote set ID when changed and load emotes automatically
+    emoteSetId.addEventListener('input', () => {
+        const setId = emoteSetId.value.trim();
+        browserAPI.storage.sync.set({ emoteSetId: setId });
+        
+        // Auto-load emotes if emotes are enabled and ID is valid
+        if (setId && emotesToggle.classList.contains('active')) {
+            browserAPI.tabs.query({ url: "*://www.youtube.com/live_chat*" }, (tabs) => {
+                tabs.forEach(tab => {
+                    browserAPI.tabs.sendMessage(tab.id, {
+                        action: 'updateEmoteSetId',
+                        emoteSetId: setId
+                    }).catch(() => {});
+                });
+            });
+            browserAPI.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+                if (tabs[0]) {
+                    browserAPI.tabs.sendMessage(tabs[0].id, {
+                        action: 'updateEmoteSetId',
+                        emoteSetId: setId
+                    }).catch(() => {});
+                }
+            });
+        }
+    });
     
     function showStatus(message, isError = false) {
         status.textContent = message;
