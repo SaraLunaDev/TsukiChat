@@ -6,14 +6,14 @@ El objetivo que busco con esta extensión es poder resubir los Chats de Twitch a
 
 ---
 
-## 🖼️ Comparación Visual
+## Comparación Visual
 
 <div align="center">
 
 | **Sin TsukiChat** | **Con TsukiChat** |
 |:---:|:---:|
 | ![Chat sin extensión](capturas/sin_extension.png) | ![Chat con extensión](capturas/con_extension.png) |
-| *Chat básico de YouTube* | *Chat estilo Twitch con badges y formato* |
+| *Chat básico de YouTube* | *Chat estilo Twitch* |
 
 </div>
 
@@ -78,8 +78,8 @@ PREFIJO_[USERNAME][DATA]
 
 En el popup puedes activar/desactivar:
 
-| Función | Descripción |
-|:---:|:---|
+| Función |
+|:---:|
 | **Modo oscuro/claro** |
 | **Fondos alternados** |
 | **Líneas divisorias** |
