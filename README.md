@@ -6,8 +6,6 @@ El objetivo que busco con esta extensión es poder resubir los Chats de Twitch a
 
 ---
 
-## Comparación Visual
-
 <div align="center">
 
 | **Sin TsukiChat** | **Con TsukiChat** |
