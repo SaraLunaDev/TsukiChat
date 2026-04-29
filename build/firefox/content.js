@@ -1,7 +1,10 @@
 (function() {
     'use strict';
     const browserAPI = (typeof browser !== 'undefined') ? browser : chrome;
-    if (!(window.location.href.includes('live_chat') || window !== window.top || document.querySelector('yt-live-chat-app'))) return;
+    const _isTopFrame = window.top === window.self;
+    const _isWatchPage = /youtube\.com\/(watch|live[\/])/.test(window.location.href);
+    const _isLiveChatFrame = window.location.href.includes('live_chat') || (window !== window.top && window.location.href.includes('youtube.com'));
+    if (!_isLiveChatFrame && !(_isTopFrame && _isWatchPage)) return;
     
     try {
         browserAPI.runtime.getURL('');
@@ -24,6 +27,296 @@
     let emoteSetId = '01J7B66AR800095HSJ1PN3Z3JB';
     let emotesData = new Map(); // Store emote names -> emote data
     
+    const tsukiChatModePrefix = 'tsuki_chat_mode_';
+    const tsukiModeKey = 'tsuki_chat_mode';
+    const tsukiTwitchChannelKey = 'tsuki_twitch_channel';
+    const TSUKI_CHANNEL_DEFAULT = 'TsukiSoft';
+    const tsukiChatHeightPrefix = 'tsuki_chat_height_';
+    const tsukiHeaderId = 'tsuki-chat-toggle-header';
+    const tsukiResizeId = 'tsuki-chat-resizable';
+    const tsukiEmbedId = 'tsuki-chat-embedbox';
+    const tsukiHeaderHeight = 48;
+
+    function getYouTubeVideoId() {
+        let params = new URLSearchParams(window.location.search);
+        if (params.has('v')) return params.get('v');
+
+        let canonical = document.querySelector("link[rel='canonical']");
+        if (canonical && canonical.href) {
+            let match = canonical.href.match(/[?&]v=([\w\-]{11})/);
+            if (match && match[1]) return match[1];
+        }
+
+        let wf = document.querySelector('ytd-watch-flexy');
+        if (wf && wf.hasAttribute('video-id')) return wf.getAttribute('video-id');
+        return null;
+    }
+
+    function getModeKey() {
+        return tsukiModeKey;
+    }
+
+    function getHeightKey(channelName) {
+        return tsukiChatHeightPrefix + (channelName || 'default');
+    }
+
+    function getCurrentChatMode() {
+        return localStorage.getItem(getModeKey()) || 'youtube';
+    }
+
+    function setCurrentChatMode(mode) {
+        const normalizedMode = mode === 'twitch' ? 'twitch' : 'youtube';
+        localStorage.setItem(getModeKey(), normalizedMode);
+        return normalizedMode;
+    }
+
+    function getCurrentTwitchChannel() {
+        return localStorage.getItem(tsukiTwitchChannelKey) || TSUKI_CHANNEL_DEFAULT;
+    }
+
+    function setCurrentTwitchChannel(channel) {
+        const normalized = (channel || '').trim() || TSUKI_CHANNEL_DEFAULT;
+        localStorage.setItem(tsukiTwitchChannelKey, normalized);
+        return normalized;
+    }
+
+    function isDarkModePage() {
+        const html = document.documentElement;
+        const body = document.body;
+        if (html.classList.contains('dark') || body.classList.contains('dark')) return true;
+        const bg = getComputedStyle(html).getPropertyValue('--yt-spec-general-background-a');
+        return Boolean(bg && bg.trim().toLowerCase().startsWith('#0f0f0f'));
+    }
+
+
+    function createTwitchEmbed(currentChannel, chatMode) {
+        let embedBox = document.getElementById(tsukiEmbedId);
+        if (!embedBox) {
+            embedBox = document.createElement('div');
+            embedBox.id = tsukiEmbedId;
+            embedBox.style.position = 'absolute';
+            embedBox.style.top = tsukiHeaderHeight + 'px';
+            embedBox.style.left = '0';
+            embedBox.style.right = '0';
+            embedBox.style.bottom = '0';
+            embedBox.style.width = '100%';
+            embedBox.style.display = 'flex';
+            embedBox.style.alignItems = 'stretch';
+            embedBox.style.justifyContent = 'stretch';
+            embedBox.style.boxSizing = 'border-box';
+            embedBox.style.background = '#0f0f0f';
+            embedBox.style.zIndex = '1000';
+            embedBox.style.overflow = 'hidden';
+        }
+
+        embedBox.style.display = chatMode === 'twitch' ? 'flex' : 'none';
+        embedBox.innerHTML = '';
+        const iframe = document.createElement('iframe');
+        iframe.setAttribute('scrolling', 'no');
+        iframe.style.flex = '1 1 100%';
+        iframe.style.width = '100%';
+        iframe.style.height = '100%';
+        iframe.style.border = 'none';
+        iframe.style.background = '#0f0f0f';
+        iframe.style.display = 'block';
+
+        const dark = darkModeEnabled ? 'darkpopout&' : '';
+
+        embedBox.appendChild(iframe);
+        return embedBox;
+    }
+
+    function createChatModeHeader(channelName, chatMode, parent) {
+        let header = document.getElementById(tsukiHeaderId);
+        const buttonLabel = chatMode === 'twitch' ? 'Mostrar chat de YouTube' : 'Mostrar chat de Twitch';
+        const channelValue = channelName || TSUKI_CHANNEL_DEFAULT;
+
+        if (!header) {
+            header = document.createElement('div');
+            header.id = tsukiHeaderId;
+            header.style.position = 'absolute';
+            header.style.top = '0';
+            header.style.left = '0';
+            header.style.width = '100%';
+            header.style.height = tsukiHeaderHeight + 'px';
+            header.style.display = 'flex';
+            header.style.alignItems = 'center';
+            header.style.justifyContent = 'space-between';
+            header.style.padding = '0 12px';
+            header.style.boxSizing = 'border-box';
+            header.style.background = 'rgba(15, 15, 15, 0.96)';
+            header.style.color = '#fff';
+            header.style.zIndex = '1001';
+            header.style.borderTopLeftRadius = '12px';
+            header.style.borderTopRightRadius = '12px';
+            header.style.fontSize = '13px';
+            header.style.fontWeight = '600';
+
+            const input = document.createElement('input');
+            input.id = tsukiHeaderId + '-input';
+            input.type = 'text';
+            input.value = channelValue;
+            input.placeholder = 'Canal Twitch';
+            input.style.flex = '1';
+            input.style.minWidth = '120px';
+            input.style.padding = '6px 10px';
+            input.style.background = '#181818';
+            input.style.color = '#fff';
+            input.style.border = '1px solid rgba(255,255,255,0.14)';
+            input.style.borderRight = 'none';
+            input.style.borderRadius = '999px 0 0 999px';
+            input.style.fontSize = '12px';
+            input.style.outline = 'none';
+
+            const updateChannel = () => {
+                const newChannel = setCurrentTwitchChannel(input.value);
+                input.value = newChannel;
+                if (getCurrentChatMode() === 'twitch') {
+                    updateChatSwap();
+                }
+            };
+
+            input.addEventListener('blur', updateChannel);
+            input.addEventListener('keydown', (event) => {
+                if (event.key === 'Enter') {
+                    event.preventDefault();
+                    updateChannel();
+                    input.blur();
+                }
+            });
+
+            const searchButton = document.createElement('button');
+            searchButton.id = tsukiHeaderId + '-search';
+            searchButton.textContent = '🔍';
+            searchButton.title = 'Aplicar canal';
+            searchButton.style.padding = '6px 10px';
+            searchButton.style.background = '#2f2f2f';
+            searchButton.style.border = '1px solid';
+            searchButton.style.borderLeft = 'none';
+            searchButton.style.borderRadius = '0 999px 999px 0';
+            searchButton.style.cursor = 'pointer';
+            searchButton.style.fontSize = '12px';
+            searchButton.style.display = 'flex';
+            searchButton.style.alignItems = 'center';
+            searchButton.style.justifyContent = 'center';
+            searchButton.addEventListener('click', (event) => {
+                event.preventDefault();
+                updateChannel();
+                input.focus();
+            });
+
+            const button = document.createElement('button');
+            button.id = tsukiHeaderId + '-button';
+            button.textContent = buttonLabel;
+            button.style.marginLeft = '10px';
+            button.style.padding = '6px 10px';
+            button.style.background = '#9147ff';
+            button.style.color = '#fff';
+            button.style.border = 'none';
+            button.style.borderRadius = '999px';
+            button.style.cursor = 'pointer';
+            button.style.fontSize = '12px';
+            button.style.whiteSpace = 'nowrap';
+
+            button.addEventListener('click', () => {
+                const currentMode = getCurrentChatMode();
+                const nextMode = currentMode === 'twitch' ? 'youtube' : 'twitch';
+                setCurrentChatMode(nextMode);
+                updateChatSwap();
+            });
+
+            header.appendChild(input);
+            header.appendChild(searchButton);
+            header.appendChild(button);
+            parent.insertBefore(header, parent.firstChild);
+        } else {
+            const input = document.getElementById(tsukiHeaderId + '-input');
+            const button = document.getElementById(tsukiHeaderId + '-button');
+            if (input) input.value = channelValue;
+            if (button) button.textContent = buttonLabel;
+        }
+
+        return header;
+    }
+
+    function updateChatSwap() {
+        // Only inject from top frame - same as youtube-twitch-chat-swapper
+        if (window.top !== window.self) return;
+
+        const ytChat = document.querySelector('ytd-live-chat-frame#chat, ytd-live-chat-frame, #chat');
+        if (!ytChat) {
+            if (!window._tsukiChatSwapRetryScheduled) {
+                window._tsukiChatSwapRetryScheduled = true;
+                setTimeout(() => {
+                    window._tsukiChatSwapRetryScheduled = false;
+                    updateChatSwap();
+                }, 1200);
+            }
+            return;
+        }
+
+        const channelName = getCurrentTwitchChannel();
+        let chatMode = getCurrentChatMode();
+
+        // Always keep ytChat visible; ensure it can host absolute children
+        ytChat.style.display = '';
+        if (getComputedStyle(ytChat).position === 'static') {
+            ytChat.style.position = 'relative';
+        }
+
+        // Relocate header if it ended up in the wrong parent
+        const existingHeader = document.getElementById(tsukiHeaderId);
+        if (existingHeader && existingHeader.parentElement !== ytChat) {
+            existingHeader.remove();
+        }
+
+        createChatModeHeader(channelName, chatMode, ytChat);
+
+        // Hide/show only the native YouTube chat iframe inside ytd-live-chat-frame
+        const ytChatIframe = ytChat.querySelector('iframe#chatframe, iframe.style-scope');
+        if (ytChatIframe) {
+            ytChatIframe.style.display = chatMode === 'twitch' ? 'none' : '';
+        }
+
+        let embedBox = document.getElementById(tsukiEmbedId);
+        // If embedBox exists but is in the wrong container, move it
+        if (embedBox && embedBox.parentElement !== ytChat) {
+            embedBox.remove();
+            embedBox = null;
+        }
+        if (!embedBox && chatMode === 'twitch') {
+            embedBox = createTwitchEmbed(channelName, chatMode);
+            ytChat.appendChild(embedBox);
+        }
+
+        if (embedBox) {
+            const iframe = embedBox.querySelector('iframe');
+            const dark = darkModeEnabled ? 'darkpopout&' : '';
+            const parentParam = 'parent=www.youtube.com';
+            const newUrl = `https://www.twitch.tv/embed/${channelName}/chat?${dark}${parentParam}`;
+            if (iframe && iframe.src !== newUrl) {
+                iframe.src = newUrl;
+            }
+            embedBox.style.display = chatMode === 'twitch' ? 'flex' : 'none';
+        }
+    }
+
+    if (window.top === window.self) {
+        let lastChatUrl = location.href;
+        if (!window._tsukiChatSwapInterval) {
+            window._tsukiChatSwapInterval = setInterval(function () {
+                if (location.href !== lastChatUrl) {
+                    lastChatUrl = location.href;
+                    setTimeout(updateChatSwap, 1500);
+                }
+            }, 1000);
+        }
+        if (!window._tsukiChatSwapLoaded) {
+            window._tsukiChatSwapLoaded = true;
+            setTimeout(updateChatSwap, 1500);
+        }
+    }
+
     browserAPI.storage.sync.get(['backgroundEnabled', 'colorAdjustEnabled', 'fontSize', 'darkModeEnabled', 'dividerEnabled', 'timestampsEnabled', 'badgesEnabled', 'badgeVisibility', 'emotesEnabled', 'emoteSetId'], (result) => {
         if (browserAPI.runtime.lastError) {
             console.error('Storage error:', browserAPI.runtime.lastError);
@@ -75,7 +368,22 @@
             updateChatTheme();
             updateBackgroundStyles();
             reapplyColorAdjustment();
+            updateChatSwap();
             sendResponse({ success: true });
+        } else if (message.action === 'toggleChatMode') {
+            const currentMode = getCurrentChatMode(TSUKI_CHANNEL);
+            const nextMode = currentMode === 'twitch' ? 'youtube' : 'twitch';
+            setCurrentChatMode(TSUKI_CHANNEL, nextMode);
+            updateChatSwap();
+            sendResponse({ success: true, mode: nextMode });
+        } else if (message.action === 'getChatMode') {
+            const currentMode = getCurrentChatMode(TSUKI_CHANNEL);
+            sendResponse({ success: true, mode: currentMode });
+        } else if (message.action === 'setChatMode') {
+            const nextMode = message.mode === 'twitch' ? 'twitch' : 'youtube';
+            setCurrentChatMode(TSUKI_CHANNEL, nextMode);
+            updateChatSwap();
+            sendResponse({ success: true, mode: nextMode });
         } else if (message.action === 'toggleDivider') {
             dividerEnabled = message.enabled;
             updateBackgroundStyles();
@@ -210,26 +518,26 @@
                 yt-live-chat-app {
                     background-color: #0f0f0f !important;
                 }
-                yt-live-chat-renderer {
+                yt-live-chat-app yt-live-chat-renderer {
                     background-color: #0f0f0f !important;
                 }
-                #items {
+                yt-live-chat-app #items {
                     background-color: #0f0f0f !important;
                 }
-                #chat-messages {
+                yt-live-chat-app #chat-messages {
                     background-color: #0f0f0f !important;
                 }
-                yt-live-chat-item-list-renderer {
+                yt-live-chat-app yt-live-chat-item-list-renderer {
                     background-color: #0f0f0f !important;
                 }
-                yt-live-chat-banner-renderer {
+                yt-live-chat-app yt-live-chat-banner-renderer {
                     background-color: #0f0f0f !important;
                     --yt-spec-inverted-background: #0f0f0f !important;
                 }
-                yt-live-chat-text-message-renderer #message {
+                yt-live-chat-app yt-live-chat-text-message-renderer #message {
                     color: #ffffff !important;
                 }
-                yt-live-chat-text-message-renderer #timestamp {
+                yt-live-chat-app yt-live-chat-text-message-renderer #timestamp {
                     color: #ffffff !important;
                 }
             `;
@@ -238,26 +546,26 @@
                 yt-live-chat-app {
                     background-color: #ffffff !important;
                 }
-                yt-live-chat-renderer {
+                yt-live-chat-app yt-live-chat-renderer {
                     background-color: #ffffff !important;
                 }
-                #items {
+                yt-live-chat-app #items {
                     background-color: #ffffff !important;
                 }
-                #chat-messages {
+                yt-live-chat-app #chat-messages {
                     background-color: #ffffff !important;
                 }
-                yt-live-chat-item-list-renderer {
+                yt-live-chat-app yt-live-chat-item-list-renderer {
                     background-color: #ffffff !important;
                 }
-                yt-live-chat-banner-renderer {
+                yt-live-chat-app yt-live-chat-banner-renderer {
                     background-color: #ffffff !important;
                     --yt-spec-inverted-background: #ffffff !important;
                 }
-                yt-live-chat-text-message-renderer #message {
+                yt-live-chat-app yt-live-chat-text-message-renderer #message {
                     color: #000000 !important;
                 }
-                yt-live-chat-text-message-renderer #timestamp {
+                yt-live-chat-app yt-live-chat-text-message-renderer #timestamp {
                     color: #000000 !important;
                 }
             `;
@@ -560,17 +868,7 @@
             const cleanMessage = match[4];
             
             // Procesar emotes en el mensaje limpio
-            if (emotesEnabled && emotesData.size > 0) {
-                const processedMessage = processEmotesInText(cleanMessage.trim());
-                if (processedMessage !== cleanMessage.trim()) {
-                    messageElement.innerHTML = processedMessage;
-                } else {
-                    messageElement.textContent = cleanMessage.trim();
-                }
-            } else {
-                // Si emotes están desactivados, mostrar solo texto
-                messageElement.textContent = cleanMessage.trim();
-            }
+            setTextWithEmotes(messageElement, cleanMessage.trim());
         });
         
         // También reprocesar eventos
@@ -587,16 +885,7 @@
             const originalEventText = dataElement.dataset.originalEventText;
             
             // Procesar emotes en el texto del evento
-            if (emotesEnabled && emotesData.size > 0) {
-                const processedEventText = processEmotesInText(originalEventText);
-                if (processedEventText !== originalEventText) {
-                    dataElement.innerHTML = processedEventText;
-                } else {
-                    dataElement.textContent = originalEventText;
-                }
-            } else {
-                dataElement.textContent = originalEventText;
-            }
+            setTextWithEmotes(dataElement, originalEventText);
         });
     };
     
@@ -618,6 +907,30 @@
         });
         
         return processedWords.join('');
+    };
+
+    const setTextWithEmotes = (element, text) => {
+        element.textContent = '';
+        if (!emotesEnabled || emotesData.size === 0) {
+            element.textContent = text;
+            return;
+        }
+        const words = text.split(/(\s+)/);
+        words.forEach(word => {
+            const trimmedWord = word.trim();
+            if (trimmedWord && emotesData.has(trimmedWord)) {
+                const emoteData = emotesData.get(trimmedWord);
+                const img = document.createElement('img');
+                img.src = `https://cdn.7tv.app/emote/${emoteData.id}/1x.avif`;
+                img.alt = emoteData.name;
+                img.title = emoteData.name;
+                img.style.cssText = `height: ${fontSize + 4}px; vertical-align: middle; margin: 0 1px;`;
+                img.addEventListener('error', () => { img.style.display = 'none'; });
+                element.appendChild(img);
+            } else {
+                element.appendChild(document.createTextNode(word));
+            }
+        });
     };
     
     const processMessage = message => {
@@ -675,28 +988,24 @@
             }
             
             if (emotesEnabled && emotesData.size > 0) {
-                const processedEventText = processEmotesInText(eventText);
-                if (processedEventText !== eventText) {
-                    if (multiplier) {
-                        dataElement.innerHTML = processedEventText + ' ';
-                        dataElement.appendChild(multiplierElement);
-                        if (additionalText) {
-                            dataElement.appendChild(document.createTextNode(' ' + additionalText));
-                        }
-                        multiplierElement.textContent = multiplier;
-                    } else {
-                        const processedEventData = processEmotesInText(eventData);
-                        if (processedEventData !== eventData) {
-                            dataElement.innerHTML = processedEventData;
-                        }
+                if (multiplier) {
+                    dataElement.textContent = '';
+                    setTextWithEmotes(dataElement, eventText);
+                    dataElement.appendChild(document.createTextNode(' '));
+                    dataElement.appendChild(multiplierElement);
+                    if (additionalText) {
+                        dataElement.appendChild(document.createTextNode(' ' + additionalText));
                     }
+                    multiplierElement.textContent = multiplier;
+                } else {
+                    setTextWithEmotes(dataElement, eventData);
                 }
             }
             
             eventContainer.appendChild(usernameElement);
             eventContainer.appendChild(dataElement);
             
-            messageElement.innerHTML = '';
+            while (messageElement.firstChild) messageElement.removeChild(messageElement.firstChild);
             messageElement.appendChild(eventContainer);
             
             const iconUrl = browserAPI.runtime.getURL(`events/${eventType}.svg`);
@@ -849,14 +1158,7 @@
             }
         }
         
-        messageElement.textContent = cleanMessage.trim();
-        
-        if (emotesEnabled && emotesData.size > 0) {
-            const processedMessage = processEmotesInText(cleanMessage.trim());
-            if (processedMessage !== cleanMessage.trim()) {
-                messageElement.innerHTML = processedMessage;
-            }
-        }
+        setTextWithEmotes(messageElement, cleanMessage.trim());
         
         const authorPhoto = message.querySelector('#author-photo');
         if (authorPhoto) authorPhoto.style.display = 'none';

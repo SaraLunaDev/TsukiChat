@@ -66,7 +66,7 @@ document.addEventListener('DOMContentLoaded', function() {
         
         emoteSetId.value = result.emoteSetId || '01J7B66AR800095HSJ1PN3Z3JB';
     });
-    
+
     backgroundToggle.addEventListener('click', () => {
         const isActive = backgroundToggle.classList.toggle('active');
         chrome.storage.sync.set({ backgroundEnabled: isActive });
