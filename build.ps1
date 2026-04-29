@@ -14,6 +14,8 @@ Copy-Item "manifest.json" "build/chrome/"
 Copy-Item "popup.html" "build/chrome/"
 Copy-Item "popup.js" "build/chrome/"
 Copy-Item "content.js" "build/chrome/"
+Copy-Item "background.js" "build/chrome/"
+Copy-Item "twitch_iframe_helper.js" "build/chrome/"
 Copy-Item "styles.css" "build/chrome/"
 Copy-Item "LICENSE" "build/chrome/"
 Copy-Item "icons" "build/chrome/" -Recurse -Force
@@ -34,7 +36,7 @@ Copy-Item "badges" "build/firefox/" -Recurse -Force
 
 Write-Host "Creando archivos ZIP..." -ForegroundColor Green
 
-$chromeZip = "build/TsukiChat_Chrome_v2.4.0.zip"
+$chromeZip = "build/TsukiChat_Chrome_v3.0.1.zip"
 if (Test-Path $chromeZip) { Remove-Item $chromeZip }
 
 $tempChrome = "build/temp_chrome"
@@ -44,7 +46,7 @@ Copy-Item "build/chrome/*" $tempChrome -Recurse -Force
 Compress-Archive -Path "$tempChrome/*" -DestinationPath $chromeZip
 Remove-Item $tempChrome -Recurse -Force
 
-$firefoxZip = "build/TsukiChat_Firefox_v2.4.0.zip"
+$firefoxZip = "build/TsukiChat_Firefox_v3.0.1.zip"
 if (Test-Path $firefoxZip) { Remove-Item $firefoxZip }
 
 Add-Type -AssemblyName System.IO.Compression.FileSystem

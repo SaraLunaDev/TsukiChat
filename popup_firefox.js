@@ -17,7 +17,7 @@ document.addEventListener('DOMContentLoaded', function() {
     const emoteOptions = document.getElementById('emoteOptions');
     const emoteSetId = document.getElementById('emoteSetId');
     const status = document.getElementById('status');
-    
+
     browserAPI.storage.sync.get(['backgroundEnabled', 'colorAdjustEnabled', 'fontSize', 'darkModeEnabled', 'dividerEnabled', 'timestampsEnabled', 'badgesEnabled', 'badgeVisibility', 'emotesEnabled', 'emoteSetId'], (result) => {
         backgroundToggle.classList.remove('active');
         colorAdjustToggle.classList.remove('active');
@@ -67,7 +67,7 @@ document.addEventListener('DOMContentLoaded', function() {
         
         emoteSetId.value = result.emoteSetId || '01J7B66AR800095HSJ1PN3Z3JB';
     });
-    
+
     backgroundToggle.addEventListener('click', () => {
         const isActive = backgroundToggle.classList.toggle('active');
         browserAPI.storage.sync.set({ backgroundEnabled: isActive });
